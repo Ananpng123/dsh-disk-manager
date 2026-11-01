@@ -58,7 +58,7 @@
         "en": "Browse local disks from the right sidebar the way This PC and Disk Management do: volume overview with usage bars, folder browsing with sorting and grouping, on-demand folder sizes, desktop shortcuts with real app icons, three-level hover previews, multiple panes, and delete to Recycle Bin. Windows only; no partition operations.",
         "zh": "在右侧栏按「此电脑 / 磁盘管理」的逻辑浏览本地磁盘：卷总览带已用进度条、目录浏览支持排序与分组、按需统计目录大小、桌面快捷区显示程序真图标、三级悬停预览、可多开、删除只进回收站。仅支持 Windows，不做任何分区操作。"
       },
-      "icon": "icon.svg",
+      "icon": "assets/icon-180.png",
       "author": "dsh-disk-manager contributors",
       "homepage": "https://github.com/Ananpng123/dsh-disk-manager",
       "repository": {

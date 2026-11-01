@@ -77,9 +77,9 @@ if (entry !== undefined) {
   );
   check(newest.engines.dsh === manifest.engines.dsh, `engines.dsh 不一致：索引 ${newest.engines.dsh} / package.json ${manifest.engines.dsh}`);
   check(entry.icon !== undefined, '没有图标');
-  if (entry.icon !== undefined && !entry.icon.startsWith('data:')) {
-    check(existsSync(join(root, 'icon.svg')), `图标指向 ${entry.icon}，但仓库里没有对应的 icon.svg`);
-    check(entry.icon.endsWith('icon.svg'), `图标应指向 icon.svg，实际是 ${entry.icon}`);
+  if (entry.icon !== undefined && !entry.icon.startsWith('data:') && !entry.icon.startsWith('http')) {
+    check(existsSync(join(root, entry.icon)), `图标指向 ${entry.icon}，但仓库里没有这个文件`);
+    check(/\.(png|svg|jpe?g|webp)$/iu.test(entry.icon), `图标扩展名不认识：${entry.icon}`);
   }
   check(
     entry.metadata.keywords.length > 0,

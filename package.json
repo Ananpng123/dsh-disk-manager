@@ -38,6 +38,7 @@
     "LICENSE",
     "CHANGELOG.md",
     "icon.svg",
+    "assets/",
     "index.json",
     "package.json",
     "cordis.patch.yml",
