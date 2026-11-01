@@ -1,0 +1,5 @@
+# Bundle patch layer: host half of the disk manager (the /api/dsh-disk route).
+# The client half registers a right-sidebar tab type named `dsh-disk`.
+- insert:
+    - id: disk-manager
+      name: 'dsh-disk-manager'

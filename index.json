@@ -1,0 +1,108 @@
+{
+  "format": 1,
+  "title": {
+    "en": "DSH Disk Manager",
+    "zh": "DSH 磁盘管理器"
+  },
+  "description": {
+    "en": "A Windows disk manager for the DeepSeek Harness right sidebar.",
+    "zh": "在 DSH 右侧栏按资源管理器逻辑浏览本地磁盘的插件。"
+  },
+  "metadata": {
+    "categories": {
+      "file-tools": {
+        "title": {
+          "en": "File tools",
+          "zh": "文件工具"
+        }
+      }
+    },
+    "labels": {
+      "windows": {
+        "title": {
+          "en": "Windows",
+          "zh": "Windows"
+        }
+      },
+      "sidebar": {
+        "title": {
+          "en": "Sidebar",
+          "zh": "侧边栏"
+        }
+      },
+      "disk": {
+        "title": {
+          "en": "Disk",
+          "zh": "磁盘"
+        }
+      }
+    },
+    "sortKeys": {
+      "stars": {
+        "title": {
+          "en": "Stars",
+          "zh": "星标数"
+        },
+        "order": "desc"
+      }
+    }
+  },
+  "plugins": [
+    {
+      "name": "dsh-disk-manager",
+      "title": {
+        "en": "Disk Manager",
+        "zh": "磁盘管理器"
+      },
+      "description": {
+        "en": "Browse local disks from the right sidebar the way This PC and Disk Management do: volume overview with usage bars, folder browsing with sorting and grouping, on-demand folder sizes, desktop shortcuts with real app icons, three-level hover previews, multiple panes, and delete to Recycle Bin. Windows only; no partition operations.",
+        "zh": "在右侧栏按「此电脑 / 磁盘管理」的逻辑浏览本地磁盘：卷总览带已用进度条、目录浏览支持排序与分组、按需统计目录大小、桌面快捷区显示程序真图标、三级悬停预览、可多开、删除只进回收站。仅支持 Windows，不做任何分区操作。"
+      },
+      "icon": "icon.svg",
+      "author": "dsh-disk-manager contributors",
+      "homepage": "https://github.com/Ananpng123/dsh-disk-manager",
+      "repository": {
+        "url": "https://github.com/Ananpng123/dsh-disk-manager"
+      },
+      "metadata": {
+        "category": "file-tools",
+        "keywords": [
+          "disk",
+          "volume",
+          "drive",
+          "file manager",
+          "explorer",
+          "folder size",
+          "recycle bin",
+          "磁盘",
+          "硬盘",
+          "文件管理",
+          "资源管理器",
+          "目录大小"
+        ],
+        "labels": [
+          "windows",
+          "sidebar",
+          "disk"
+        ],
+        "sortKeys": {
+          "stars": 0
+        }
+      },
+      "versions": [
+        {
+          "version": "0.2.0",
+          "publishTimestamp": 1793532900,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Ananpng123/dsh-disk-manager",
+            "commit": "0000000000000000000000000000000000000000"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5"
+          }
+        }
+      ]
+    }
+  ]
+}

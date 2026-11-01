@@ -1,0 +1,107 @@
+# dsh-disk-manager
+
+[English](README.md) | 中文
+
+在 DeepSeek Harness 右侧栏按「磁盘管理 / 资源管理器」的逻辑浏览本地磁盘：卷总览、目录浏览、目录大小统计、桌面快捷入口与预览。
+
+> 仅支持 Windows。只读浏览 + 进回收站的删除，**不做任何分区操作**（扩容 / 压缩 / 格式化）。
+
+![icon](icon.svg)
+
+## 功能
+
+- **卷总览**：按「此电脑」的排法显示每块盘——盘体图标、`卷标 (盘符)`、已用进度条、`X 可用，共 Y`
+- **目录浏览**：进入任意目录，支持排序（名称/大小/修改时间/类型）、分组、详细/紧凑两种密度
+- **地址栏**：点一下变输入框，直接输入路径回车跳转
+- **目录大小统计**：右键目录按需统计，带时限保护，不会卡住界面
+- **按类型打开**：文本/代码/图片/PDF/Office 交给右栏内置预览；视频、音频、压缩包等直接交给系统默认程序
+- **桌面快捷区**：桌面内容直接铺在卷列表下半区，快捷方式显示应用真图标
+- **悬停预览**：鼠标停在文件夹上，右侧浮层显示内容，最多三级，支持级联与下钻
+- **多开**：右键「在新标签页打开」，两个面板可以停在不同盘上，各自记住位置
+- **删除**：文件/文件夹右键删除，二次确认，只进回收站
+
+## 安装
+
+### 从插件市场安装
+
+在 DSH 设置 → 插件市场的索引源里添加：
+
+```
+https://ananpng123.github.io/dsh-disk-manager/index.json
+```
+
+然后在发现页搜索 `disk`，点安装。
+
+### 从本地目录安装
+
+```bash
+# 在 DSH 里通过插件管理器安装（本地目录或包）
+plugin_manager install_bundle <path-to>dsh-disk-manager
+```
+
+安装后**重启一次 DSH**，右栏即出现「磁盘」入口。
+
+> 插件分两半：`index.js` 跑在 DSH 宿主进程，`client.js` 跑在浏览器。**改动了 `index.js` 必须重启 DSH**，刷新页面只能更新 `client.js`。
+
+## 使用
+
+1. 会话头部点「磁盘」→ 右栏打开磁盘面板
+2. 点卷卡片进入该盘，或用地址栏直接输入路径
+3. 右键文件/文件夹：打开、在新标签页打开、在终端中打开、在资源管理器中显示、属性、删除
+4. 右键卷卡片：打开、在新标签页打开、磁盘体检（复制提示词并开新对话）、属性
+
+## 兼容性
+
+| 项 | 要求 |
+|---|---|
+| 系统 | Windows 10 / 11 |
+| DSH | `>=0.2.1-rc.5`（实测版本） |
+| PowerShell | Windows PowerShell 5.1（系统自带） |
+| 依赖 | 无第三方 npm 依赖 |
+
+## 已知限制
+
+- **仅 Windows**：host 半全部依赖 Windows API 与 PowerShell，其它平台整个插件不工作
+- **不做分区操作**：不提供扩容、压缩、格式化
+- **无永久删除**：删除一律进回收站
+- **无重命名 / 撤销**：因此右键菜单里也没有「撤销重命名」
+- **不自动刷新**：磁盘内容变化需要手动刷新
+- **图标**：走 `SHGetFileInfo`，UWP 与普通程序均可；极少数注册异常的 AppX 可能显示通用图标
+- **PowerShell 被禁用时**：图标退化为文件类型图标，其余功能不受影响
+
+## 结构
+
+```
+dsh-disk-manager/
+├── package.json        # 插件清单、bundle patch、client inject
+├── cordis.patch.yml    # 插入 host 半
+├── index.js            # host 半：HTTP 端点（/api/dsh-disk）
+├── client.js           # client 半：右栏 tab、菜单、浮层
+├── icon.svg            # 插件图标
+├── index.json          # 插件市场索引（格式 1）
+├── test/               # 冒烟自检 + 索引校验
+└── ACCEPTANCE-*.md     # 验收报告
+```
+
+host 端点：`volumes` `ls` `size` `open` `reveal` `terminal` `mkdir` `info` `cleanup` `clipboard` `icons` `trash` `settings`。
+
+## 开发
+
+```bash
+# 语法检查
+node --check index.js && node --check client.js
+
+# 冒烟自检：直接调宿主侧 handlers，不需要启动 DSH
+npm test
+
+# 市场索引校验：用宿主自带的 parseMarketIndex 跑一遍
+npm run test:market
+```
+
+`npm test` 在系统临时目录建沙箱，跑 7 项：卷枚举、目录列举、目录大小、新建、重名文案、文件属性、空路径拦截，跑完自动清理。
+
+`npm run test:market` 读取 `index.json`，用 DSH 安装目录里的 `@deepseek-ai/dsh-plugin-market-index` 校验字段、相对图标解析与安装参数，缺字段或写错会在报错里给出 JSON 路径。
+
+## 许可证
+
+MIT
