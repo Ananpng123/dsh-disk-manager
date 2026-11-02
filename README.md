@@ -39,16 +39,39 @@ Then search for `disk` on the Discover page and install.
 plugin_manager install_bundle <path-to>dsh-disk-manager
 ```
 
-**Restart DSH once** after installing; the "Disk" entry then appears in the sidebar.
+**Restart DSH once** after installing; two new buttons then appear in the session header — see [Where the new buttons are](#where-the-new-buttons-are).
 
 > The plugin has two halves: `index.js` runs in the DSH host process, `client.js` runs in the browser. **Changing `index.js` requires a DSH restart**; a page refresh only reloads `client.js`.
 
 ## Usage
 
-1. Click "Disk" in the session header — the disk panel opens in the right sidebar
-2. Click a volume card to enter it, or type a path into the address bar
-3. Right-click a file or folder: open, open in new tab, open in terminal, reveal in Explorer, properties, delete
-4. Right-click a volume card: open, open in new tab, disk checkup (copies a prompt and starts a new conversation), properties
+**Install, then restart DSH once.** The host half registers an HTTP route (`/api/dsh-disk`) that only comes alive after a restart — before that, every action reports "backend not ready". The client half hot-reloads, the host half does not.
+
+### Where the new buttons are
+
+After restarting, look at the **session header** — the row of small icons above the input box. Two new buttons appear there:
+
+| Icon | Tooltip | What it opens |
+|---|---|---|
+| Monitor | Desktop files | Your Desktop folder as a right-sidebar tab, with a tree you can expand in place |
+| Stacked folder | Workspace files | Documents each conversation in this workspace produced, grouped by conversation |
+
+Both open as tabs in the right sidebar, so you can keep several of them open at once.
+
+### Disk panel
+
+1. Click the monitor icon (or any volume in an already-open disk tab) to reach the volume list
+2. Click a volume to enter it, or type a path into the address bar and press Enter
+3. Click a folder to expand it in place; double-click to open it as its own page
+4. Right-click a file or folder: open in the built-in preview, open with the system app, reveal in Explorer, copy path, delete (Recycle Bin only)
+5. Right-click a volume card: open, open in new tab, disk checkup, properties
+
+### Workspace files panel
+
+1. Click the stacked-folder icon
+2. The list is grouped by conversation, newest first; click a group header to collapse or expand
+3. Click a document to open it in DSH's built-in preview; right-click for system app / reveal / copy path / delete
+4. The search box filters across all groups by file name
 
 ## Compatibility
 
