@@ -1,6 +1,6 @@
 {
   "name": "dsh-disk-manager",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "A Windows disk manager for the DeepSeek Harness right sidebar: volume overview, session-grouped workspace documents, drag-to-chat, a tree file browser with real app icons, and delete to the recycle bin.",
   "type": "module",
   "license": "MIT",
