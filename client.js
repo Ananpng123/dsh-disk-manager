@@ -2071,28 +2071,7 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dsk-head' },
-          h('span', { className: 'dsk-title', style: { flex: '0 0 auto' } }, '工作区文件'),
-          h(
-            'span',
-            {
-              className: 'dsk-hint',
-              title: root,
-              style: {
-                flex: '1 1 auto',
-                minWidth: 0,
-                marginLeft: 6,
-                marginBottom: 0,
-                fontSize: 11,
-                opacity: 0.55,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              },
-            },
-            // 标题旁边只放末段目录名，完整路径挂在 hover 上：
-            // 一整条 C:\Users\... 塞在这行会把标题和按钮顶到两边，中间空一大块。
-            root === '' ? '' : root.split(/[\\/]/).filter(Boolean).pop() || root,
-          ),
+          h('span', { className: 'dsk-title', title: root === '' ? '工作区文件' : root }, '工作区文件'),
           h('button', { type: 'button', className: 'dsk-btn', title: '重新扫描', onClick: () => void load() }, '⟳'),
         ),
         h(
