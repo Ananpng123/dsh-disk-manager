@@ -143,6 +143,9 @@ window.__ModuleLoader__.load({
 .dsk-appicon{width:16px;height:16px;object-fit:contain}
 .dsk-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .dsk-size{flex:0 0 auto;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums}
+/* 体积占比条：P1 唯一新增的视觉元素。空条表示还没算出来，不画成 0 长度实心条误导 */
+.dsk-ratio{flex:0 0 74px;height:4px;border-radius:2px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
+.dsk-ratio i{display:block;height:100%;width:0;border-radius:2px;background:var(--dsw-alias-brand-primary,#0078d4);transition:width .25s ease}
 .dsk-calc{flex:0 0 auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary,inherit);font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px}
 .dsk-calc:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16));color:inherit}
 .dsk-path{flex:1 1 auto;font-size:11px;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
@@ -1174,6 +1177,42 @@ window.__ModuleLoader__.load({
         setBusy({});
       }, [path]);
 
+      // 自动扫描时要在循环里读到最新的 sizes，闭包里的 sizes 是渲染时的旧值
+      const sizesRef = useRef(sizes);
+      useEffect(() => {
+        sizesRef.current = sizes;
+      }, [sizes]);
+
+      // 进目录后自动算所有子目录的体积：4 个并发，算完一条填一条。
+      // 复用现有的 size 端点与 onMeasure，不新增端点。
+      useEffect(() => {
+        const dirs = entries.filter((e) => e.isDir).map((e) => e.path);
+        if (dirs.length === 0) return undefined;
+        let cancelled = false;
+        let cursor = 0;
+        const worker = async () => {
+          while (!cancelled) {
+            const index = cursor;
+            cursor += 1;
+            if (index >= dirs.length) return;
+            const target = dirs[index];
+            // undefined = 没算过；null = 正在算；对象 = 有结果
+            if (sizesRef.current[target] !== undefined) continue;
+            try {
+              await onMeasure(target);
+            } catch {
+              // 单个目录失败不影响其它项，错误由 measure 内部报
+            }
+          }
+        };
+        for (let i = 0; i < 4; i += 1) void worker();
+        return () => {
+          cancelled = true;
+        };
+        // 只在目录内容变化时重跑；sizes 变化不该触发新一轮扫描
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [data]);
+
       const toggleDir = async (entry) => {
         const target = entry.path;
         if (expanded.has(target)) {
@@ -1196,6 +1235,17 @@ window.__ModuleLoader__.load({
           setBusy((prev) => ({ ...prev, [target]: false }));
         }
       };
+
+      // 条宽按「本层最大项」归一，百分比按「本层合计」算：两个口径分开给，不混用
+      let maxDirBytes = 0;
+      let totalDirBytes = 0;
+      for (const item of entries) {
+        if (!item.isDir) continue;
+        const m = sizes[item.path];
+        if (!m || typeof m.bytes !== 'number') continue;
+        if (m.bytes > maxDirBytes) maxDirBytes = m.bytes;
+        totalDirBytes += m.bytes;
+      }
 
       const renderRow = (entry, depth = 0) => {
         const measured = sizes[entry.path];
@@ -1241,6 +1291,20 @@ window.__ModuleLoader__.load({
                 : h(FileIcon, { name: entry.name }),
           ),
           h('span', { className: 'dsk-name' }, entry.name),
+          // 占比条：宽度按本层最大项归一（最大那个满格），悬停显示占本层百分比。
+          // 还没算出来的目录条是空的，不画成 0 长度实心条假装有数据。
+          (() => {
+            if (!entry.isDir) return null;
+            const m = sizes[entry.path];
+            const done = m && typeof m.bytes === 'number';
+            const width = done && maxDirBytes > 0 ? Math.max(2, Math.round((m.bytes / maxDirBytes) * 100)) : 0;
+            const pct = done && totalDirBytes > 0 ? ((m.bytes / totalDirBytes) * 100).toFixed(1) : '';
+            return h(
+              'span',
+              { className: 'dsk-ratio', title: done ? `占本层 ${pct}%` : '还没算' },
+              h('i', { style: { width: `${width}%` } }),
+            );
+          })(),
           entry.isDir && !layout.compact
             ? h('button', {
                 className: 'dsk-calc',
