@@ -96,7 +96,7 @@
           "source": {
             "type": "git",
             "url": "https://github.com/Ananpng123/dsh-disk-manager",
-            "commit": "c424dfba99b36a08554db387b6dd17ee867ff60c"
+            "commit": "af51a34a0ed249fe8df1c2f33f98c9f5e0f89182"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5"
