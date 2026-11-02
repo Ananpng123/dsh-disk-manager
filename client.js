@@ -1943,7 +1943,14 @@ window.__ModuleLoader__.load({
           const list = Array.isArray(data?.groups) ? data.groups : [];
           setRoot(data?.root || base);
           setGroups(list);
-          setMeta({ scanned: data?.scanned || 0, capped: Boolean(data?.capped) });
+          setMeta({
+            scanned: data?.scanned || 0,
+            capped: Boolean(data?.capped),
+            home: data?.home || '',
+            buckets: data?.buckets || 0,
+            matched: data?.matchedBuckets || 0,
+            candidates: data?.candidates || 0,
+          });
           setOpen(new Set(list.length > 0 ? [list[0].id] : []));
           setLoading(false);
         } catch (err) {
@@ -2047,26 +2054,26 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dsk-head' },
           h('span', { className: 'dsk-title' }, '工作区文件'),
+          h(
+            'span',
+            {
+              className: 'dsk-hint',
+              title: root,
+              style: {
+                flex: '1 1 auto',
+                minWidth: 0,
+                marginLeft: 8,
+                fontSize: 11,
+                opacity: 0.6,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+              },
+            },
+            root,
+          ),
           h('button', { type: 'button', className: 'dsk-btn', title: '重新扫描', onClick: () => void load() }, '⟳'),
         ),
-        root !== ''
-          ? h(
-              'div',
-              {
-                className: 'dsk-hint',
-                title: root,
-                style: {
-                  padding: '0 10px 6px',
-                  fontSize: 11,
-                  opacity: 0.6,
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                },
-              },
-              root,
-            )
-          : null,
         h(
           'div',
           { style: { padding: '0 10px 6px' } },
@@ -2087,7 +2094,7 @@ window.__ModuleLoader__.load({
           loading
             ? h('div', { className: 'dsk-empty' }, '正在扫描会话记录…')
             : rows.length === 0
-              ? h('div', { className: 'dsk-empty' }, q === '' ? '这个工作区还没有会话碰过文件' : '没有匹配的文件')
+              ? h('div', { className: 'dsk-empty' }, q === '' ? `没有可列出的文件。扫描：会话目录 ${meta.home}（共 ${meta.buckets} 个工作区，匹配 ${meta.matched} 个），候选会话 ${meta.candidates} 个，扫描 ${meta.scanned} 个，命中分组 ${groups.length} 个。` : '没有匹配的文件')
               : rows,
           meta.capped
             ? h('div', { className: 'dsk-more' }, `只扫描了最近 ${meta.scanned} 个会话，更早的没列出来`)
@@ -2109,6 +2116,20 @@ window.__ModuleLoader__.load({
       );
     }
 
+    function WorkspaceIcon({ size = 18 }) {
+      // 用 SVG 而不是 emoji：emoji 在不同字体/主题下会变成彩色方块，和标题排在一起很难看
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
+        h('path', {
+          d: 'M3 7.5A2.5 2.5 0 0 1 5.5 5h4l2 2.5h7A2.5 2.5 0 0 1 21 10v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7.5Z',
+          stroke: 'currentColor',
+          strokeWidth: 1.6,
+          strokeLinejoin: 'round',
+        }),
+      );
+    }
+
     function WorkspaceButton({ nav }) {
       return h(
         'button',
@@ -2124,7 +2145,7 @@ window.__ModuleLoader__.load({
             }
           },
         },
-        h('span', { 'aria-hidden': 'true' }, '🗂'),
+        h(WorkspaceIcon, { size: 18 }),
       );
     }
 

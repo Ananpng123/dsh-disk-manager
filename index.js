@@ -21,6 +21,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
+import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { zstdDecompressSync } from 'node:zlib'
 
@@ -562,7 +563,9 @@ const TREE_IGNORE = new Set([
 const TREE_IGNORE_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini'])
 
 function sessionsRoot() {
-  const home = process.env.DSH_HOME || join(process.env.USERPROFILE || '', '.dsh')
+  // DSH_HOME 是命令行/插件注入的，宿主进程里不一定有；homedir() 在任何进程里都成立，
+  // 所以兜底用它而不是 USERPROFILE（后者在 Electron 里也可能缺失）。
+  const home = process.env.DSH_HOME || join(homedir(), '.dsh')
   return join(home, 'sessions')
 }
 
@@ -882,7 +885,17 @@ function listSessionGroups(input) {
     })
   }
   groups.sort((a, b) => b.mtime - a.mtime)
-  return { root, groups, scanned: limit, capped: candidates.length > limit }
+  return {
+    root,
+    groups,
+    scanned: limit,
+    capped: candidates.length > limit,
+    // 诊断字段：面板列不出来时靠这几个数定位是哪一层的锅
+    home: sessionsDir,
+    buckets: buckets.length,
+    matchedBuckets: bucketsToScan.length,
+    candidates: candidates.length,
+  }
 }
 
 // 导出给本地验证脚本用（不经 HTTP 直接打这三个函数），运行时不依赖这个导出
