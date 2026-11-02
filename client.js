@@ -2095,7 +2095,7 @@ window.__ModuleLoader__.load({
             },
             h('span', { style: { width: 14, flex: '0 0 auto', opacity: 0.7 } }, expanded ? '▾' : '▸'),
             h('span', { className: 'dsk-name' }, group.title),
-            h('span', { className: 'dsk-badge' }, String(files.length)),
+            h('span', { className: 'dsk-size' }, String(files.length)),
           ),
         );
         if (!expanded) continue;
@@ -2131,12 +2131,9 @@ window.__ModuleLoader__.load({
                   setMenu({ x: event.clientX, y: event.clientY, entry: file });
                 },
               },
+              h('span', { className: 'dsk-ico' }, h(FileIcon, { name: file.name })),
               h('span', { className: 'dsk-name' }, file.name),
-              h(
-                'span',
-                { className: 'dsk-badge', title: '创建时间', style: { fontWeight: 400, fontSize: 12, letterSpacing: 0, opacity: 0.55, fontVariantNumeric: 'tabular-nums' } },
-                fmtTime(file.birthtime || file.mtime),
-              ),
+              h('span', { className: 'dsk-size', title: '创建时间' }, fmtTime(file.birthtime || file.mtime)),
             ),
           );
         }
