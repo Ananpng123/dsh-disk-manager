@@ -146,6 +146,11 @@ window.__ModuleLoader__.load({
 .dsk-row-vol .dsk-name{flex:0 0 44%;min-width:110px}
 .dsk-size{flex:0 0 auto;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums}
 /* 体积占比条：P1 唯一新增的视觉元素。空条表示还没算出来，不画成 0 长度实心条误导 */
+.dsk-map{width:100%;height:100%;display:block}
+.dsk-map .blk{cursor:pointer}
+.dsk-map .blk rect{stroke:var(--dsw-alias-bg-layer-1,#fff);stroke-width:1.5}
+.dsk-map .blk:hover rect{stroke:var(--dsw-alias-brand-primary,#0078d4);stroke-width:2}
+.dsk-map .blk text{fill:#fff;font-size:11px;pointer-events:none}
 .dsk-ratio{flex:0 0 80px;height:5px;border-radius:3px;margin-left:8px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
 .dsk-pct{flex:0 0 42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;margin-left:6px}
 .dsk-ratio i{display:block;height:100%;width:0;border-radius:2px;background:var(--dsw-alias-brand-primary,#0078d4);transition:width .25s ease}
@@ -334,13 +339,20 @@ window.__ModuleLoader__.load({
       return dot > 0 ? raw.slice(dot + 1).toLowerCase() : '';
     }
 
-    function sortEntries(entries, layout) {
+    function sortEntries(entries, layout, sizes) {
       const factor = layout.desc ? -1 : 1;
+      // 文件夹在目录列表里 size 恒为 0，按大小排等于没排；
+      // 用扫出来的体积（sizes 里的 bytes）代替，没扫出来的排在最后。
+      const bytesOf = (entry) => {
+        if (!entry.isDir) return entry.size || 0;
+        const m = sizes && sizes[entry.path];
+        return m && typeof m.bytes === 'number' ? m.bytes : -1;
+      };
       return entries.slice().sort((a, b) => {
         // 目录永远在前，跟资源管理器一致：翻目录时不该在一堆文件里找文件夹
         if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
         let delta = 0;
-        if (layout.sort === 'size') delta = (a.size || 0) - (b.size || 0);
+        if (layout.sort === 'size') delta = bytesOf(a) - bytesOf(b);
         else if (layout.sort === 'mtime') delta = (a.mtime || 0) - (b.mtime || 0);
         else if (layout.sort === 'type') delta = extOf(a.name).localeCompare(extOf(b.name), 'zh-CN');
         else delta = a.name.localeCompare(b.name, 'zh-CN');
@@ -1081,6 +1093,16 @@ window.__ModuleLoader__.load({
           { className: 'dsk-head' },
           h(PathBar, { path: '', onGo, placeholder: '此电脑' }),
           h('button', { className: 'dsk-iconbtn', onClick: onRefresh, title: '刷新' }, '⟳'),
+          h(
+            'button',
+            {
+              className: 'dsk-iconbtn',
+              title: viewMode === 'map' ? '切回列表' : '按体积看方块',
+              style: { opacity: viewMode === 'map' ? 1 : 0.6 },
+              onClick: () => setViewMode((prev) => (prev === 'map' ? 'list' : 'map')),
+            },
+            '▦',
+          ),
         ),
         h(
           'div',
@@ -1169,6 +1191,8 @@ window.__ModuleLoader__.load({
 
       // 树状浏览：目录行点一下就展开子项，不用整页跳走。
       // 子目录内容按需拉（ls 端点），拉过就缓存，折叠再展开不重复请求。
+      // 列表 / 方块两种看法的切换，状态放在组件里，切目录不重置
+      const [viewMode, setViewMode] = useState('list');
       const [tree, setTree] = useState({});
       const [expanded, setExpanded] = useState(() => new Set());
       const [busy, setBusy] = useState({});
@@ -1250,6 +1274,84 @@ window.__ModuleLoader__.load({
         totalDirBytes += m.bytes;
       }
 
+      // 方块视图：面积严格等于体积。只画已经算出体积的项，
+      // 没算出来的不画（画成 0 面积会被误读成「这目录是空的」）。
+      const renderBoxes = () => {
+        const list = sortEntries(entries, layout, sizes)
+          .map((entry) => {
+            const measured = sizes[entry.path];
+            const bytes = entry.isDir
+              ? measured && typeof measured.bytes === 'number'
+                ? measured.bytes
+                : 0
+              : entry.size || 0;
+            return { entry, size: bytes };
+          })
+          .filter((item) => item.size > 0);
+
+        if (list.length === 0) {
+          return h('div', { className: 'dsk-empty' }, '体积还在算，等几秒再切过来');
+        }
+
+        const boxes = boxLayout(list, 0, 0, 100, 100, true);
+        return h(
+          'div',
+          { style: { position: 'relative', width: '100%', height: '100%', minHeight: '240px' } },
+          boxes.map((box) => {
+            const wide = box.w > 14 && box.h > 10;
+            const tall = box.h > 16;
+            return h(
+              'div',
+              {
+                key: box.item.entry.path,
+                title: `${box.item.entry.name} · ${fmtBytes(box.item.size)}`,
+                onClick: () =>
+                  box.item.entry.isDir ? onEnter(box.item.entry.path) : onOpen(box.item.entry),
+                style: {
+                  position: 'absolute',
+                  left: `${box.x}%`,
+                  top: `${box.y}%`,
+                  width: `${box.w}%`,
+                  height: `${box.h}%`,
+                  padding: '2px',
+                  boxSizing: 'border-box',
+                  cursor: 'pointer',
+                },
+              },
+              h(
+                'div',
+                {
+                  style: {
+                    width: '100%',
+                    height: '100%',
+                    borderRadius: '4px',
+                    background: boxColor(box.item.entry),
+                    color: '#fff',
+                    fontSize: '11px',
+                    lineHeight: '1.35',
+                    padding: '5px',
+                    boxSizing: 'border-box',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '1px',
+                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)',
+                  },
+                },
+                wide
+                  ? h(
+                      'span',
+                      { style: { fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } },
+                      box.item.entry.name,
+                    )
+                  : null,
+                wide && tall ? h('span', { style: { opacity: 0.82 } }, fmtBytes(box.item.size)) : null,
+              ),
+            );
+          }),
+        );
+      };
+
       const renderRow = (entry, depth = 0) => {
         const measured = sizes[entry.path];
         const sizeText = layout.compact
@@ -1329,7 +1431,7 @@ window.__ModuleLoader__.load({
       // 排序和分组都在前端做：host 只给一层原始条目，换排序不该再打一次盘
       const rows = [];
       let currentGroup = null;
-      for (const entry of sortEntries(entries, layout)) {
+      for (const entry of sortEntries(entries, layout, sizes)) {
         if (layout.group !== 'none') {
           const group = groupOf(entry, layout.group);
           if (group !== currentGroup) {
@@ -1371,7 +1473,9 @@ window.__ModuleLoader__.load({
             ? h('div', { className: error === HOST_HINT ? 'dsk-err-host' : 'dsk-err' }, error)
             : null,
           loading && entries.length === 0 ? h('div', { className: 'dsk-empty' }, '读取目录…') : null,
-          (() => {
+          viewMode === 'map'
+            ? renderBoxes()
+            : (() => {
             // 把「扁平 rows + 已展开的子树」摊成一张有序的可见行清单
             const out = [];
             const walk = (list, depth) => {
@@ -1415,6 +1519,50 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // 方块配色：目录统一蓝，文件按扩展名散列到固定色板，同一个后缀颜色恒定
+    const BOX_COLORS = ['#4c8dff', '#3ecf8e', '#f59e0b', '#c084fc', '#ff6b6b', '#22b8cf', '#f783ac', '#94a3b8'];
+    function boxColor(entry) {
+      if (entry.isDir) return '#4c8dff';
+      const ext = (entry.name.split('.').pop() || '').toLowerCase();
+      let hash = 0;
+      for (const ch of ext) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
+      return BOX_COLORS[hash % BOX_COLORS.length];
+    }
+
+    // 二分切分：每次按体积把当前矩形切成两半，交替横竖切。
+    // 不是 squarified，但「面积 = 体积」这个性质成立，够用且好懂。
+    function boxLayout(items, x, y, w, h, horizontal) {
+      if (items.length === 0) return [];
+      if (items.length === 1) return [{ item: items[0], x, y, w, h }];
+      const total = items.reduce((sum, i) => sum + i.size, 0) || 1;
+      let acc = 0;
+      let split = 1;
+      for (let i = 0; i < items.length; i += 1) {
+        acc += items[i].size;
+        if (acc >= total / 2) {
+          split = i + 1;
+          break;
+        }
+      }
+      if (split >= items.length) split = items.length - 1;
+      const head = items.slice(0, split);
+      const tail = items.slice(split);
+      const headTotal = head.reduce((sum, i) => sum + i.size, 0);
+      const ratio = headTotal / total;
+      if (horizontal) {
+        const cut = w * ratio;
+        return [
+          ...boxLayout(head, x, y, cut, h, false),
+          ...boxLayout(tail, x + cut, y, w - cut, h, false),
+        ];
+      }
+      const cut = h * ratio;
+      return [
+        ...boxLayout(head, x, y, w, cut, true),
+        ...boxLayout(tail, x, y + cut, w, h - cut, true),
+      ];
+    }
+
     // ---------- tab 正文 ----------
     function DiskPane({ sessionId, nav, useTabInfo }) {
       // 资源型 tab 的地址末段就是打开时指定的路径；拿不到就退回「记住上次」。
@@ -1447,7 +1595,8 @@ window.__ModuleLoader__.load({
       const [sizes, setSizes] = useState({});
       const [loading, setLoading] = useState(false);
       const [error, setError] = useState('');
-      const [layout, setLayoutState] = useState({ sort: 'name', desc: false, group: 'none', compact: false });
+      // 默认按体积倒序：进目录第一眼想看的是「谁最占地方」
+      const [layout, setLayoutState] = useState({ sort: 'size', desc: true, group: 'none', compact: false });
       const [menu, setMenu] = useState(null);
       const [modal, setModal] = useState(null);
       const [notice, setNotice] = useState('');
