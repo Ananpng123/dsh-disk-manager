@@ -4,7 +4,7 @@ English | [中文](README.zh.md)
 
 Browse local disks from the DeepSeek Harness right sidebar, following the logic of Windows Disk Management / File Explorer: volume overview, folder browsing, folder size accounting, desktop shortcuts, and hover previews.
 
-> Windows only. Read-only browsing plus delete-to-Recycle-Bin. **No partition operations** (extend / shrink / format are not implemented).
+> Windows only. Browsing plus exactly two write operations: delete (always to the Recycle Bin) and create folder. **No partition operations** (extend / shrink / format are not implemented).
 
 ![icon](icon.svg)
 
@@ -19,6 +19,7 @@ Browse local disks from the DeepSeek Harness right sidebar, following the logic 
 - **Hover peek** — rest the pointer on a folder and a floating panel shows its contents, up to three levels, with drill-down
 - **Multiple panes** — "Open in new tab" gives each panel its own drive and its own remembered location
 - **Delete** — right-click a file or folder, confirm once, it goes to the Recycle Bin
+- **New folder** — right-click empty space inside a directory, type a name, it is created in place; an existing name is reported instead of overwritten
 
 ## Install
 
