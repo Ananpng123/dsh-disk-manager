@@ -1750,7 +1750,12 @@ window.__ModuleLoader__.load({
         }
 
         restoredRef.current = true;
-        restoreTo(startPath || takeTarget() || readLast(storageKey)?.path);
+        // 地址是唯一真相：tab 记录说去哪儿就去哪儿，「此电脑」就停在卷列表。
+        // 只有连 tab 记录都拿不到时，才用 localStorage 兜底 ——
+        // 否则点会话头的磁盘入口会被上次的目录（比如桌面）顶掉。
+        const fromTab = startPath || takeTarget();
+        const fallback = tabRecord ? '' : readLast(storageKey)?.path;
+        restoreTo(fromTab || fallback);
         return undefined;
       }, [tabReady, startPath, storageKey, loadDir]);
 
