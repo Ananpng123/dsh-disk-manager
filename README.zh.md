@@ -43,6 +43,23 @@ plugin_manager install_bundle <path-to>dsh-disk-manager
 
 > 插件分两半：`index.js` 跑在 DSH 宿主进程，`client.js` 跑在浏览器。**改动了 `index.js` 必须重启 DSH**，刷新页面只能更新 `client.js`。
 
+## 收录状态
+
+已向两个社区索引提交，都在等审核：
+
+| 索引 | 提交 | 状态 |
+|---|---|---|
+| awesome-dsh-plugin | [PR #11387](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/11387) | open，CI 全绿，改动 +7/-0 |
+| 开放插件市场（dshopen.org） | [issue #200](https://github.com/polang233/dsh-plugin-index/issues/200) | open，走 Git 来源（尚未发 npm） |
+
+两个都合并之前，直接按 tag 装：
+
+```bash
+git+https://github.com/Ananpng123/dsh-disk-manager.git#v0.4.2
+```
+
+插件自带的索引托管在 <https://ananpng123.github.io/dsh-disk-manager/index.json>，把它加进 Discover 的索引源就能立刻看到这条收录。
+
 ## 使用
 
 **装完必须重启一次 DSH。** 宿主侧要注册 HTTP 路由（`/api/dsh-disk`），重启才会挂上；没重启时任何操作都会提示「后端未就绪」。界面侧有热更新，宿主侧没有。

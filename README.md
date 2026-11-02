@@ -43,6 +43,23 @@ plugin_manager install_bundle <path-to>dsh-disk-manager
 
 > The plugin has two halves: `index.js` runs in the DSH host process, `client.js` runs in the browser. **Changing `index.js` requires a DSH restart**; a page refresh only reloads `client.js`.
 
+## Listing status
+
+Submitted to two community indexes, both waiting for review:
+
+| Index | Submission | Status |
+|---|---|---|
+| awesome-dsh-plugin | [PR #11387](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/11387) | open, CI green, +7/-0 |
+| Open Plugin Market (dshopen.org) | [issue #200](https://github.com/polang233/dsh-plugin-index/issues/200) | open, Git source (no npm release yet) |
+
+Until either is merged, install straight from the tag:
+
+```bash
+git+https://github.com/Ananpng123/dsh-disk-manager.git#v0.4.2
+```
+
+The market index this plugin ships is self-hosted at <https://ananpng123.github.io/dsh-disk-manager/index.json>; add it as an index source in Discover to see the listing immediately.
+
 ## Usage
 
 **Install, then restart DSH once.** The host half registers an HTTP route (`/api/dsh-disk`) that only comes alive after a restart — before that, every action reports "backend not ready". The client half hot-reloads, the host half does not.
