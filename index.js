@@ -592,8 +592,51 @@ function findSessionFile(sessionId) {
 
 // 只解压第一行：整份会话可能有几千行，但我们只要开头那条 session 事件。
 // zstd 没有流式"只解前几字节"的简单接口，整份解压后立刻切片，几十 KB 的开销可忽略。
+// 不传 sessionId 时退到「最近改动的那个会话」。
+// 为什么需要这条兜底：右栏 tab 拿到的 sessionId 未必是当前正在聊的那个会话，
+// 拿错了就会拿到别的工作区、扫出一片空白。最近改动的一定是正在用的那个。
+function latestSessionFile() {
+  const root = sessionsRoot()
+  let buckets = []
+  try {
+    buckets = readdirSync(root)
+  } catch {
+    return null
+  }
+  let best = null
+  for (const bucket of buckets) {
+    let dirs = []
+    try {
+      dirs = readdirSync(join(root, bucket))
+    } catch {
+      continue
+    }
+    for (const id of dirs) {
+      if (!id.startsWith('session-')) continue
+      const dir = join(root, bucket, id)
+      let names = []
+      try {
+        names = readdirSync(dir)
+      } catch {
+        continue
+      }
+      const store = names.find((n) => n.startsWith('session.v4.jsonl'))
+      if (store === undefined) continue
+      const file = join(dir, store)
+      try {
+        const st = statSync(file)
+        if (best === null || st.mtimeMs > best.mtime) best = { file, mtime: st.mtimeMs }
+      } catch {
+        continue
+      }
+    }
+  }
+  return best === null ? null : best.file
+}
+
 function workspaceOf(input) {
-  const file = findSessionFile(input?.sessionId)
+  const wanted = typeof input?.sessionId === 'string' ? input.sessionId.trim() : ''
+  const file = wanted !== '' ? findSessionFile(wanted) : latestSessionFile()
   if (!file) return { root: '', source: 'none' }
   try {
     const raw = file.endsWith('.zstd')
@@ -602,7 +645,7 @@ function workspaceOf(input) {
     const cut = raw.indexOf('\n')
     const head = JSON.parse(cut > 0 ? raw.slice(0, cut) : raw)
     const cwd = typeof head?.cwd === 'string' ? head.cwd : ''
-    return { root: cwd, source: cwd ? 'session' : 'none' }
+    return { root: cwd, source: cwd ? (wanted !== '' ? 'session' : 'latest') : 'none' }
   } catch (error) {
     return { root: '', source: 'none', error: error?.message ?? '' }
   }

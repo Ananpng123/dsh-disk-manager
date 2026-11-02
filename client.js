@@ -1929,7 +1929,7 @@ window.__ModuleLoader__.load({
         setError('');
         try {
           const found = await call('workspace', { sessionId });
-          const base = found?.root || '';
+          let base = found?.root || '';
           if (base === '') {
             if (!alive.current) return;
             setRoot('');
@@ -1938,9 +1938,24 @@ window.__ModuleLoader__.load({
             setLoading(false);
             return;
           }
-          const data = await call('sessions', { root: base });
+          let data = await call('sessions', { root: base });
+          let list = Array.isArray(data?.groups) ? data.groups : [];
+          // 兜底：tab 给的 sessionId 未必属于当前工作区，那样会扫出一片空白。
+          // 按「最近改动的会话」再定位一次，那通常正是用户在看的那个工作区。
+          if (list.length === 0) {
+            const fallback = await call('workspace', {});
+            const alt = fallback?.root || '';
+            if (alt !== '' && alt !== base) {
+              const retry = await call('sessions', { root: alt });
+              const retryList = Array.isArray(retry?.groups) ? retry.groups : [];
+              if (retryList.length > 0) {
+                base = alt;
+                data = retry;
+                list = retryList;
+              }
+            }
+          }
           if (!alive.current) return;
-          const list = Array.isArray(data?.groups) ? data.groups : [];
           setRoot(data?.root || base);
           setGroups(list);
           setMeta({
