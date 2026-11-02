@@ -141,12 +141,13 @@ window.__ModuleLoader__.load({
 .dsk-row-dir{cursor:pointer}
 .dsk-ico{flex:0 0 auto;display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center}
 .dsk-appicon{width:16px;height:16px;object-fit:contain}
-.dsk-name{flex:0 1 auto;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.dsk-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .dsk-gap{flex:1 1 auto;min-width:0}
+.dsk-row-vol .dsk-name{flex:0 0 44%;min-width:110px}
 .dsk-size{flex:0 0 auto;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums}
 /* 体积占比条：P1 唯一新增的视觉元素。空条表示还没算出来，不画成 0 长度实心条误导 */
-.dsk-ratio{flex:0 0 90px;height:5px;border-radius:3px;margin-left:10px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
-.dsk-pct{flex:0 0 46px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;margin-left:6px}
+.dsk-ratio{flex:0 0 80px;height:5px;border-radius:3px;margin-left:8px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
+.dsk-pct{flex:0 0 42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;margin-left:6px}
 .dsk-ratio i{display:block;height:100%;width:0;border-radius:2px;background:var(--dsw-alias-brand-primary,#0078d4);transition:width .25s ease}
 .dsk-calc{flex:0 0 auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary,inherit);font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px}
 .dsk-calc:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16));color:inherit}
@@ -610,7 +611,7 @@ window.__ModuleLoader__.load({
                   'div',
                   {
                     key: entry.path,
-                    className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
+                    className: `dsk-row dsk-row-vol${entry.isDir ? ' dsk-row-dir' : ''}`,
                     title: entry.path,
                     onClick: () => (entry.isDir ? enter(entry) : onOpenEntry(entry)),
                     onMouseEnter: (event) => openChild(entry, event),
