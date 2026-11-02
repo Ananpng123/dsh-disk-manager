@@ -794,6 +794,7 @@ function sessionFiles(file, root) {
   let title = ''
   let skipped = 0
   let calls = 0
+  const types = {}
   const hits = new Map() // 相对路径 → 最后一次出现的时间
   for (const line of lines) {
     if (line === '') continue
@@ -803,6 +804,7 @@ function sessionFiles(file, root) {
     } catch {
       continue
     }
+    if (typeof event.type === 'string') types[event.type] = (types[event.type] || 0) + 1
     if (event.type === 'session' && cwd === '') {
       cwd = typeof event.cwd === 'string' ? event.cwd : ''
       continue
@@ -826,7 +828,7 @@ function sessionFiles(file, root) {
     }
   }
   if (cwd === '' || cwd.toLowerCase() !== root.toLowerCase()) {
-    return { cwdMismatch: true, cwd, title, calls, hits: hits.size, skipped, files: [] }
+    return { cwdMismatch: true, cwd, title, calls, hits: hits.size, skipped, files: [], types, head: text.slice(0, 160) }
   }
   const files = []
   for (const [rel, at] of hits) {
@@ -851,7 +853,7 @@ function sessionFiles(file, root) {
     files.push({ path: full, rel, name: segments[segments.length - 1], size: st.size, mtime: st.mtimeMs, at })
   }
   files.sort((a, b) => b.at - a.at)
-  return { cwd, title, files, skipped, calls, hits: hits.size }
+  return { cwd, title, files, skipped, calls, hits: hits.size, types, head: text.slice(0, 160) }
 }
 
 // 会话目录名就是工作区路径的编码：`D:\prodcut\DSH原生官方\插件`
@@ -944,6 +946,7 @@ function listSessionGroups(input) {
   const groups = []
   // 分层计数：读了几份会话 → cwd 对上几个 → 工具调用几次 → 路径命中几条 → 过滤后成组几个
   const tally = { read: 0, cwdMismatch: 0, calls: 0, hits: 0, skipped: 0, grouped: 0 }
+  let sample = null
   for (let i = 0; i < limit; i += 1) {
     const candidate = candidates[i]
     let parsed = null
@@ -960,6 +963,7 @@ function listSessionGroups(input) {
       tally.cwdMismatch += 1
       continue
     }
+    if (sample === null) sample = { types: parsed.types || {}, head: parsed.head || "", title: parsed.title || "" }
     tally.calls += parsed.calls || 0
     tally.hits += parsed.hits || 0
     tally.skipped += parsed.skipped || 0
@@ -986,6 +990,7 @@ function listSessionGroups(input) {
     candidates: candidates.length,
     build: BUILD_TAG,
     tally,
+    sample,
   }
 }
 

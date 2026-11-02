@@ -1967,6 +1967,7 @@ window.__ModuleLoader__.load({
             candidates: data?.candidates || 0,
             build: data?.build || '',
             tally: data?.tally || { read: 0, cwdMismatch: 0, calls: 0, hits: 0, skipped: 0, grouped: 0 },
+            sample: data?.sample || null,
           });
           setOpen(new Set(list.length > 0 ? [list[0].id] : []));
           setLoading(false);
@@ -2115,7 +2116,7 @@ window.__ModuleLoader__.load({
                   'div',
                   { className: 'dsk-empty' },
                   q === ''
-                    ? `没有可列出的文件。（host ${meta.build || '未知'}）工作区 ${root} ｜ 会话目录 ${meta.home} ｜ 工作区 ${meta.buckets} 个，匹配 ${meta.matched} ｜ 候选 ${meta.candidates}，扫描 ${meta.scanned} ｜ 读到 ${meta.tally.read}，cwd 不符 ${meta.tally.cwdMismatch} ｜ 工具调用 ${meta.tally.calls}，路径命中 ${meta.tally.hits}，成组 ${meta.tally.grouped}，跳过 ${meta.tally.skipped}`
+                    ? `没有可列出的文件。（host ${meta.build || '未知'}）工作区 ${root} ｜ 会话目录 ${meta.home} ｜ 工作区 ${meta.buckets} 个，匹配 ${meta.matched} ｜ 候选 ${meta.candidates}，扫描 ${meta.scanned} ｜ 读到 ${meta.tally.read}，cwd 不符 ${meta.tally.cwdMismatch} ｜ 工具调用 ${meta.tally.calls}，路径命中 ${meta.tally.hits}，成组 ${meta.tally.grouped}，跳过 ${meta.tally.skipped} ｜ 样本事件 ${meta.sample ? Object.entries(meta.sample.types || {}).map(([k, v]) => `${k}×${v}`).join('，') : '无'}`
                     : '没有匹配的文件',
                 )
               : rows,
