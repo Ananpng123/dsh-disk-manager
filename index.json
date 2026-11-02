@@ -49,7 +49,7 @@
   },
   "plugins": [
     {
-      "name": "dsh-disk-manager",
+      "name": "@ananyang/dsh-disk-manager",
       "title": {
         "en": "Disk Manager",
         "zh": "磁盘管理器"

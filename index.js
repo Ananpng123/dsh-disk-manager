@@ -25,7 +25,7 @@ import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { zstdDecompressSync } from 'node:zlib'
 
-export const name = 'dsh-disk-manager'
+export const name = '@ananyang/dsh-disk-manager'
 export const inject = []
 
 const ROUTE = '/api/dsh-disk'

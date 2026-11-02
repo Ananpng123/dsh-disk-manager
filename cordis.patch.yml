@@ -2,4 +2,4 @@
 # The client half registers a right-sidebar tab type named `dsh-disk`.
 - insert:
     - id: disk-manager
-      name: 'dsh-disk-manager'
+      name: '@ananyang/dsh-disk-manager'
