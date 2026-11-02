@@ -1093,16 +1093,6 @@ window.__ModuleLoader__.load({
           { className: 'dsk-head' },
           h(PathBar, { path: '', onGo, placeholder: '此电脑' }),
           h('button', { className: 'dsk-iconbtn', onClick: onRefresh, title: '刷新' }, '⟳'),
-          h(
-            'button',
-            {
-              className: 'dsk-iconbtn',
-              title: viewMode === 'map' ? '切回列表' : '按体积看方块',
-              style: { opacity: viewMode === 'map' ? 1 : 0.6 },
-              onClick: () => setViewMode((prev) => (prev === 'map' ? 'list' : 'map')),
-            },
-            '▦',
-          ),
         ),
         h(
           'div',
@@ -1457,6 +1447,16 @@ window.__ModuleLoader__.load({
             title: '上一级',
           }, '↑'),
           h('button', { className: 'dsk-iconbtn', onClick: onRefresh, title: '刷新' }, '⟳'),
+          h(
+            'button',
+            {
+              className: 'dsk-iconbtn',
+              title: viewMode === 'map' ? '切回列表' : '按体积看方块',
+              style: { opacity: viewMode === 'map' ? 1 : 0.6 },
+              onClick: () => setViewMode((prev) => (prev === 'map' ? 'list' : 'map')),
+            },
+            '▦',
+          ),
           h('button', {
             className: 'dsk-iconbtn',
             title: '更多操作',
