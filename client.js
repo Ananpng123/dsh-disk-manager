@@ -611,7 +611,7 @@ window.__ModuleLoader__.load({
                   'div',
                   {
                     key: entry.path,
-                    className: `dsk-row dsk-row-vol${entry.isDir ? ' dsk-row-dir' : ''}`,
+                    className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
                     title: entry.path,
                     onClick: () => (entry.isDir ? enter(entry) : onOpenEntry(entry)),
                     onMouseEnter: (event) => openChild(entry, event),
@@ -1263,7 +1263,7 @@ window.__ModuleLoader__.load({
           'div',
           {
             key: entry.path,
-            className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
+            className: `dsk-row dsk-row-vol${entry.isDir ? ' dsk-row-dir' : ''}`,
             title: entry.path,
             style: { paddingLeft: 6 + depth * 16 },
             draggable: !entry.isDir,
