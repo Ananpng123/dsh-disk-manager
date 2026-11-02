@@ -426,11 +426,9 @@ function openSettings(input) {
 // 删除只走回收站，永不做永久删除。
 // 用 Microsoft.VisualBasic.FileIO 而不是 Remove-Item：后者要么进回收站要靠 COM 折腾，
 // 要么就是真删。这个接口一个参数就把「进回收站 + 文件/目录通用」都解决了。
-async function trashPath(input) {
-  const target = requirePath(input).replace(/[\\/]+$/, '')
-
-  // 桌面本身、用户主目录、盘根这三类绝不能删：VB 的 DeleteDirectory 对它们只会抛
-  // 「The system call level is not correct」，而且真删掉了是灾难。
+// 桌面本身、用户主目录、盘根这三类绝不能删：VB 的 DeleteDirectory 对它们只会抛
+// 「The system call level is not correct」，而且真删掉了是灾难。
+async function assertDeletable(target) {
   const desk = (await desktopPath()).path.replace(/[\\/]+$/, '')
   const home = String(process.env.USERPROFILE || '').replace(/[\\/]+$/, '')
   const lower = target.toLowerCase()
@@ -443,6 +441,11 @@ async function trashPath(input) {
   if (/^[A-Za-z]:$/.test(target)) {
     throw new Error('整个磁盘不能删')
   }
+}
+
+async function trashPath(input) {
+  const target = requirePath(input).replace(/[\\/]+$/, '')
+  await assertDeletable(target)
   const script = [
     '$ProgressPreference = "SilentlyContinue"',
     '[Console]::InputEncoding = [System.Text.Encoding]::UTF8',
@@ -480,6 +483,76 @@ async function trashPath(input) {
   const line = String(stdout || '').trim().split(/\r?\n/).pop() || ''
   if (line.startsWith('OK ')) return { path: target, action: 'trash' }
   throw new Error(line.replace(/^ERR\s*/, '') || '删除失败')
+}
+
+// 批量删除：PowerShell 脚本本来就支持多路径，之前只是每次只塞一个进去。
+// 选 10 个文件就起 10 次 PowerShell，用户看到的就是「一个一个地掉」。
+async function trashPaths(input) {
+  const raw = Array.isArray(input?.paths) ? input.paths : []
+  const targets = raw
+    .filter((p) => typeof p === 'string' && p.trim() !== '')
+    .map((p) => p.trim().replace(/[\\/]+$/, ''))
+  if (targets.length === 0) throw new Error('path is required')
+
+  const allowed = []
+  const failed = []
+  for (const target of targets) {
+    try {
+      await assertDeletable(target)
+      allowed.push(target)
+    } catch (error) {
+      failed.push({ path: target, message: error?.message ?? '不能删除' })
+    }
+  }
+  if (allowed.length === 0) return { ok: [], failed }
+
+  const script = [
+    '$ProgressPreference = "SilentlyContinue"',
+    '[Console]::InputEncoding = [System.Text.Encoding]::UTF8',
+    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8',
+    'Add-Type -AssemblyName Microsoft.VisualBasic',
+    '$raw = [Console]::In.ReadToEnd()',
+    '$paths = $raw | ConvertFrom-Json',
+    'foreach ($p in $paths) {',
+    '  try {',
+    '    if (Test-Path -LiteralPath $p -PathType Container) {',
+    '      [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '    } else {',
+    '      [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '    }',
+    '    Write-Output ("OK " + $p)',
+    '  } catch {',
+    '    Write-Output ("ERR " + $p + " :: " + $_.Exception.Message)',
+    '  }',
+    '}',
+  ].join('\n')
+
+  const encoded = Buffer.from(script, 'utf16le').toString('base64')
+  const stdout = await new Promise((resolve, reject) => {
+    const child = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', encoded], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    })
+    let out = ''
+    child.stdout.on('data', (chunk) => {
+      out += chunk.toString('utf8')
+    })
+    child.on('error', reject)
+    child.on('close', () => resolve(out))
+    child.stdin.end(JSON.stringify(allowed), 'utf8')
+  })
+
+  const ok = []
+  for (const line of String(stdout || '').split(/\r?\n/)) {
+    const text = line.trim()
+    if (text.startsWith('OK ')) ok.push(text.slice(3))
+    else if (text.startsWith('ERR ')) {
+      const body = text.slice(4)
+      const cut = body.indexOf(' :: ')
+      failed.push({ path: cut > 0 ? body.slice(0, cut) : body, message: cut > 0 ? body.slice(cut + 4) : '删除失败' })
+    }
+  }
+  return { ok, failed }
 }
 
 function pathInfo(input) {
@@ -1114,6 +1187,7 @@ export const handlers = {
   desktop: () => desktopPath(),
   icons: (args) => shortcutIcons(args),
   trash: (args) => trashPath(args?.path),
+  trashMany: (args) => trashPaths(args),
   settings: (args) => openSettings(args?.uri),
   read: (args) => readFileBytes(args),
   workspace: (args) => workspaceOf(args),

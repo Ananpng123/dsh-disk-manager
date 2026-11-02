@@ -2071,16 +2071,16 @@ window.__ModuleLoader__.load({
         const paths = [...selected];
         if (paths.length === 0) return;
         if (!window.confirm(`把这 ${paths.length} 个文件放进回收站？`)) return;
-        let failed = 0;
-        for (const target of paths) {
-          try {
-            await call('trash', { path: target });
-          } catch {
-            failed += 1;
-          }
+        try {
+          // 一次调用删完：宿主那边一条 PowerShell 处理整批，
+          // 之前逐个 await 是每个文件起一次进程，看着就像在「一个一个地掉」。
+          const result = await call('trashMany', { paths });
+          const failed = (result?.failed || []).length;
+          if (failed > 0) setError(`有 ${failed} 个文件没能删掉，可能正被别的程序占用`);
+        } catch (err) {
+          setError(friendlyError(err));
         }
         setSelected(new Set());
-        if (failed > 0) setError(`有 ${failed} 个文件没能删掉，可能正被别的程序占用`);
         void load();
       };
 
