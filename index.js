@@ -19,9 +19,9 @@
  */
 
 import { execFile, spawn } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync, writeFileSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { homedir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { promisify } from 'node:util'
 import { zstdDecompressSync } from 'node:zlib'
 
@@ -978,6 +978,32 @@ function listSessionGroups(input) {
     })
   }
   groups.sort((a, b) => b.mtime - a.mtime)
+  // 诊断落盘：面板列不出东西时，外部直接读这个文件就能定位断在哪一层，
+  // 不用让用户对着屏幕抄一长串数字。
+  try {
+    writeFileSync(
+      join(tmpdir(), 'dsh-disk-diag.json'),
+      JSON.stringify(
+        {
+          build: BUILD_TAG,
+          at: new Date().toISOString(),
+          root,
+          home: sessionsDir,
+          buckets: buckets.length,
+          matchedBuckets: bucketsToScan.length,
+          candidates: candidates.length,
+          scanned: limit,
+          tally,
+          sample,
+        },
+        null,
+        1,
+      ),
+      'utf8',
+    )
+  } catch {
+    // 写不了就算了，面板上的诊断还在
+  }
   return {
     root,
     groups,
