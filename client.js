@@ -1203,7 +1203,8 @@ window.__ModuleLoader__.load({
         sizesRef.current = sizes;
       }, [sizes]);
 
-      // 进目录后自动算所有子目录的体积：4 个并发，算完一条填一条。
+      // 进目录后自动算所有子目录的体积：3 个并发，算完一条填一条。
+      // 并发放到 3 是因为宿主每算一个目录就是一次完整递归，4 个会把主进程拖住。
       // 复用现有的 size 端点与 onMeasure，不新增端点。
       useEffect(() => {
         const dirs = entries.filter((e) => e.isDir).map((e) => e.path);
@@ -1219,7 +1220,7 @@ window.__ModuleLoader__.load({
             // undefined = 没算过；null = 正在算；对象 = 有结果
             if (sizesRef.current[target] !== undefined) continue;
             try {
-              await onMeasure(target);
+              await onMeasure(target, true);
             } catch {
               // 单个目录失败不影响其它项，错误由 measure 内部报
             }
@@ -1740,7 +1741,9 @@ window.__ModuleLoader__.load({
         return () => clearInterval(timer);
       }, [view]);
 
-      const measure = useCallback(async (target) => {
+      // silent=true 时失败不弹红条：自动扫描碰到的权限拒绝（System Volume Information、
+      // Documents and Settings 这类）属于正常情况，不该当故障提示
+      const measure = useCallback(async (target, silent) => {
         setSizes((prev) => ({ ...prev, [target]: prev[target] ?? null }));
         try {
           const value = await call('size', { path: target, deadlineMs: 3000 });
@@ -1748,7 +1751,14 @@ window.__ModuleLoader__.load({
           setSizes((prev) => ({ ...prev, [target]: value }));
         } catch (err) {
           if (!alive.current) return;
-          setError(friendlyError(err));
+          // 失败/超时的项要从 sizes 里摘掉（回到 undefined），下次进目录才会重试；
+          // 留在 null 会让它永远停在「算中」，而 null 被当成「算过」直接跳过。
+          setSizes((prev) => {
+            const next = { ...prev };
+            delete next[target];
+            return next;
+          });
+          if (!silent) setError(friendlyError(err));
         }
       }, []);
 
