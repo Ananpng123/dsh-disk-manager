@@ -55,8 +55,8 @@
         "zh": "磁盘管理器"
       },
       "description": {
-        "en": "Browse local disks from the right sidebar the way This PC and Disk Management do: volume overview with usage bars, folder browsing with sorting and grouping, on-demand folder sizes, desktop shortcuts with real app icons, three-level hover previews, multiple panes, and delete to Recycle Bin. Windows only; no partition operations.",
-        "zh": "在右侧栏按「此电脑 / 磁盘管理」的逻辑浏览本地磁盘：卷总览带已用进度条、目录浏览支持排序与分组、按需统计目录大小、桌面快捷区显示程序真图标、三级悬停预览、可多开、删除只进回收站。仅支持 Windows，不做任何分区操作。"
+        "en": "Browse local disks from the right sidebar the way This PC and Disk Management do: volume overview with usage bars, folder browsing with sorting and grouping, drag files straight into the chat composer, on-demand folder sizes, desktop shortcuts with real app icons, three-level hover previews, multiple panes, and delete to Recycle Bin. Windows only; no partition operations.",
+        "zh": "在右侧栏按「此电脑 / 磁盘管理」的逻辑浏览本地磁盘：卷总览带已用进度条、目录浏览支持排序与分组、把文件直接拖进对话输入框、按需统计目录大小、桌面快捷区显示程序真图标、三级悬停预览、可多开、删除只进回收站。仅支持 Windows，不做任何分区操作。"
       },
       "icon": "assets/icon-180.png",
       "author": "dsh-disk-manager contributors",
@@ -91,12 +91,12 @@
       },
       "versions": [
         {
-          "version": "0.2.0",
-          "publishTimestamp": 1793532900,
+          "version": "0.3.0",
+          "publishTimestamp": 1793586300,
           "source": {
             "type": "git",
             "url": "https://github.com/Ananpng123/dsh-disk-manager",
-            "commit": "8733a715bb2184879177bf7178f5905135bfa5b7"
+            "commit": "c424dfba99b36a08554db387b6dd17ee867ff60c"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5"

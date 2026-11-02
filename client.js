@@ -41,6 +41,67 @@ window.__ModuleLoader__.load({
       return `${value >= 100 ? value.toFixed(0) : value.toFixed(1)} ${units[i]}`;
     }
 
+    // 拖到对话：浏览器不允许网页凭空造文件，字节必须由宿主读出来（host 的 read 端点），
+    // 页面再包成 File 塞进拖拽数据。鼠标按下就开始预读，等真正拖动时文件通常已经在手里；
+    // 读得太慢就退化成拖路径文本，至少不会「拖了个空」。
+    const DRAG_MAX_BYTES = 20 * 1024 * 1024;
+    let dragCache = { path: '', file: null, pending: null, error: '', timer: 0 };
+
+    function toFile(payload) {
+      const bin = atob(payload.base64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return new File([bytes], payload.name, { type: payload.type || 'application/octet-stream' });
+    }
+
+    function prefetchDrag(path, size) {
+      if (!path) return null;
+      if (dragCache.path === path && (dragCache.file || dragCache.pending)) return dragCache.pending;
+      if ((Number(size) || 0) > DRAG_MAX_BYTES) return null; // 大文件不预读，白耗内存
+      if (dragCache.timer) {
+        clearTimeout(dragCache.timer);
+        dragCache.timer = 0;
+      }
+      dragCache = { path, file: null, pending: null, error: '', timer: 0 };
+      const pending = call('read', { path })
+        .then((payload) => {
+          if (dragCache.path !== path) return null;
+          dragCache.file = toFile(payload);
+          return dragCache.file;
+        })
+        .catch((error) => {
+          dragCache.error = friendlyError(error);
+          return null;
+        })
+        .finally(() => {
+          dragCache.pending = null;
+        });
+      dragCache.pending = pending;
+      return pending;
+    }
+
+    function startDrag(event, entry) {
+      const dt = event.dataTransfer;
+      if (!dt) return;
+      dt.effectAllowed = 'copy';
+      const cached = dragCache.path === entry.path ? dragCache.file : null;
+      if (cached) {
+        dt.items.add(cached);
+        return;
+      }
+      // 字节还没到手：先拖路径文本，松手也不会丢东西
+      dt.setData('text/plain', entry.path);
+      if (!dragCache.error) void prefetchDrag(entry.path, entry.size);
+    }
+
+    function endDrag() {
+      if (!dragCache.path) return;
+      if (dragCache.timer) clearTimeout(dragCache.timer);
+      dragCache.timer = setTimeout(() => {
+        if (!dragCache.pending) dragCache = { path: '', file: null, pending: null, error: '', timer: 0 };
+      }, 8000);
+    }
+
     const CSS = `
 .dsk-root{display:flex;flex-direction:column;height:100%;min-height:0;font:inherit;color:var(--dsw-alias-label-primary,inherit)}
 .dsk-head{display:flex;align-items:center;gap:6px;padding:8px 10px 6px;flex:0 0 auto}
@@ -1081,6 +1142,10 @@ window.__ModuleLoader__.load({
                                     key: item.path,
                                     className: `dsk-row${item.isDir ? ' dsk-row-dir' : ''}`,
                                     title: item.path,
+                                    draggable: !item.isDir,
+                                    onMouseDown: item.isDir ? undefined : () => prefetchDrag(item.path, item.size),
+                                    onDragStart: item.isDir ? undefined : (event) => startDrag(event, item),
+                                    onDragEnd: item.isDir ? undefined : endDrag,
                                     onClick: item.isDir
                                       ? (event) => onPeekItem(event, item, 0)
                                       : () => onOpenEntry(item),
@@ -1157,6 +1222,10 @@ window.__ModuleLoader__.load({
             key: entry.path,
             className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
             title: entry.path,
+            draggable: !entry.isDir,
+            onMouseDown: entry.isDir ? undefined : () => prefetchDrag(entry.path, entry.size),
+            onDragStart: entry.isDir ? undefined : (event) => startDrag(event, entry),
+            onDragEnd: entry.isDir ? undefined : endDrag,
             onClick: () => (entry.isDir ? onEnter(entry.path) : onOpen(entry)),
             onContextMenu: (event) => {
               event.preventDefault();

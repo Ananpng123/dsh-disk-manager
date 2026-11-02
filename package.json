@@ -1,7 +1,7 @@
 {
   "name": "dsh-disk-manager",
-  "version": "0.2.0",
-  "description": "A Windows disk manager for the DeepSeek Harness right sidebar: volume overview, folder browsing, on-demand folder sizes, desktop shortcuts with real app icons, and three-level hover previews.",
+  "version": "0.3.0",
+  "description": "A Windows disk manager for the DeepSeek Harness right sidebar: volume overview, folder browsing with drag-to-chat, on-demand folder sizes, desktop shortcuts with real app icons, and three-level hover previews.",
   "type": "module",
   "license": "MIT",
   "author": "dsh-disk-manager contributors",

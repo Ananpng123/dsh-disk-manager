@@ -19,8 +19,8 @@
  */
 
 import { execFile, spawn } from 'node:child_process'
-import { mkdirSync, readdirSync, statfsSync, statSync, existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync } from 'node:fs'
+import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
 
 export const name = 'dsh-disk-manager'
@@ -497,6 +497,53 @@ function pathInfo(input) {
   }
 }
 
+// 拖拽进对话：浏览器不允许网页凭空造文件，字节必须由宿主读出来再交给页面。
+// 20 MB 是内存红线，超过就别走这条路，改用输入框自带的附件按钮。
+const DRAG_MAX_BYTES = 20 * 1024 * 1024
+
+const MIME_BY_EXT = new Map([
+  ['png', 'image/png'], ['jpg', 'image/jpeg'], ['jpeg', 'image/jpeg'], ['gif', 'image/gif'],
+  ['webp', 'image/webp'], ['bmp', 'image/bmp'], ['svg', 'image/svg+xml'], ['ico', 'image/x-icon'],
+  ['pdf', 'application/pdf'], ['txt', 'text/plain'], ['md', 'text/markdown'],
+  ['json', 'application/json'], ['csv', 'text/csv'], ['log', 'text/plain'],
+  ['zip', 'application/zip'], ['7z', 'application/x-7z-compressed'], ['rar', 'application/vnd.rar'],
+  ['mp4', 'video/mp4'], ['mov', 'video/quicktime'], ['mp3', 'audio/mpeg'], ['wav', 'audio/wav'],
+  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+])
+
+function readFileBytes(input) {
+  const target = requirePath(input?.path)
+  let st
+  try {
+    st = statSync(target)
+  } catch (error) {
+    if (error?.code === 'ENOENT') throw new Error('文件已经不在这个位置了')
+    throw error
+  }
+  if (!st.isFile()) throw new Error('这个不是一个文件，文件夹不能拖进对话')
+  if (st.size > DRAG_MAX_BYTES) {
+    const mb = (st.size / (1024 * 1024)).toFixed(1)
+    throw new Error(`文件有 ${mb} MB，超过 20 MB 拖不进对话，改用输入框的附件按钮`)
+  }
+  const dot = target.lastIndexOf('.')
+  const ext = dot < 0 ? '' : target.slice(dot + 1).toLowerCase()
+  let body
+  try {
+    body = readFileSync(target)
+  } catch (error) {
+    if (error?.code === 'EACCES') throw new Error('这个文件当前打不开，可能被别的程序占着')
+    throw error
+  }
+  return {
+    name: basename(target),
+    size: st.size,
+    type: MIME_BY_EXT.get(ext) ?? 'application/octet-stream',
+    base64: body.toString('base64'),
+  }
+}
+
 // 导出给本地验证脚本用（不经 HTTP 直接打这三个函数），运行时不依赖这个导出
 export const handlers = {
   volumes: () => listVolumes(),
@@ -513,6 +560,7 @@ export const handlers = {
   icons: (args) => shortcutIcons(args),
   trash: (args) => trashPath(args?.path),
   settings: (args) => openSettings(args?.uri),
+  read: (args) => readFileBytes(args),
 }
 
 function envelope(value) {
