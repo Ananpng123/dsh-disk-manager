@@ -161,7 +161,7 @@ function listDir(input) {
  * 所以这里不追求算完 —— 到点就返回 done:false 和已经算到的部分，
  * 前端把进度条停在那儿并标「未完成」，比卡死等 60 秒强。
  */
-function measureSize(input, deadlineMs) {
+async function measureSize(input, deadlineMs) {
   const target = typeof input === 'string' && input.trim() !== '' ? input : 'C:\\'
   const budget = Math.min(Math.max(Number(deadlineMs) || 5000, 500), SIZE_MAX_MS)
   const started = Date.now()
@@ -172,8 +172,15 @@ function measureSize(input, deadlineMs) {
   let dirs = 0
   let done = true
   const stack = [target]
+  // 每处理这么多个条目就让出一次事件循环。
+  // readdir/stat 都是同步调用，整棵树跑下来会把宿主主线程按住好几秒 ——
+  // 那段时间里连「切回磁盘列表」这种请求都排不进来，表现就是点了没反应。
+  // 分片之后单次占用降到 20~30ms，人眼看不出来，总耗时基本不变。
+  const YIELD_EVERY = 400
+  let ops = 0
+  const yieldNow = () => new Promise((resolve) => setImmediate(resolve))
 
-  while (stack.length > 0) {
+  outer: while (stack.length > 0) {
     if (Date.now() > deadline) {
       done = false
       break
@@ -196,6 +203,15 @@ function measureSize(input, deadlineMs) {
           bytes += statSync(full).size
         } catch {
           // 单个文件读不到就跳过，不中断整次统计
+        }
+      }
+      ops += 1
+      if (ops >= YIELD_EVERY) {
+        ops = 0
+        await yieldNow()
+        if (Date.now() > deadline) {
+          done = false
+          break outer
         }
       }
     }
