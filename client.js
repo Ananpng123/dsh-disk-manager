@@ -1564,6 +1564,36 @@ window.__ModuleLoader__.load({
     }
 
     // ---------- tab 正文 ----------
+    // 渲染兜底：面板里任何一块抛错，只把这一块换成一行报错，不让整个 tab 变成空白。
+    // 之前几次「点开一片空白/像没反应」都是异常直接吞掉了整棵组件树，屏幕上一点线索都没有。
+    // 用 IIFE 守一道：万一这版宿主的 react 没有 class 组件支持，就退化成透传，绝不因此把插件带崩。
+    const Boundary = (() => {
+      const Base = react.Component;
+      if (typeof Base !== 'function') return (props) => props.children;
+      return class Boundary extends Base {
+        constructor(props) {
+          super(props);
+          this.state = { err: null };
+        }
+
+        static getDerivedStateFromError(err) {
+          return { err };
+        }
+
+        componentDidCatch(err) {
+          console.error('[dsh-disk] 面板渲染出错', err);
+        }
+
+        render() {
+          if (this.state.err) {
+            const msg = String((this.state.err && this.state.err.message) || this.state.err);
+            return h('div', { className: 'dsk-err', style: { margin: '8px' } }, `面板渲染出错：${msg}`);
+          }
+          return this.props.children;
+        }
+      };
+    })();
+
     function DiskPane({ sessionId, nav, useTabInfo }) {
       // 资源型 tab 的地址末段就是打开时指定的路径；拿不到就退回「记住上次」。
       // 顺带用它当记忆键：两个磁盘 tab 各记各的，不会互相覆盖。
@@ -2638,7 +2668,12 @@ window.__ModuleLoader__.load({
               guard('tab body', () =>
                 slots.register(
                   { name: 'sidebar.right.pane.tab', key: TYPE_ID },
-                  (props) => h(DiskPane, { sessionId: props?.sessionId, nav, useTabInfo: props?.useTabInfo }),
+                  (props) =>
+                    h(
+                      Boundary,
+                      null,
+                      h(DiskPane, { sessionId: props?.sessionId, nav, useTabInfo: props?.useTabInfo }),
+                    ),
                 ),
               ),
             'dsh-disk-manager: tab body',
