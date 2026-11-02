@@ -573,6 +573,34 @@ const DOC_EXT = new Set([
   'mp4', 'mov', 'webm', 'mp3', 'wav',
 ])
 
+// DSH 的会话文件是「每行一帧」的多帧 zstd（实测 6MB / 4000+ 帧）。
+// Node 24.22 的 zstdDecompressSync 会一路解到结尾，但 Electron 里那份 24.21
+// 只解第一帧就返回，于是整个文件只剩开头那一行 session 事件 —— 面板永远空着。
+// 这里自己按帧魔数切开逐帧解，谁家的 Node 都能读全；解不出的帧直接跳过。
+const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
+
+function readSessionText(file) {
+  const buf = readFileSync(file)
+  if (!file.endsWith('.zstd')) return buf.toString('utf8')
+  const starts = []
+  let cursor = 0
+  while ((cursor = buf.indexOf(ZSTD_MAGIC, cursor)) !== -1) {
+    starts.push(cursor)
+    cursor += 4
+  }
+  if (starts.length === 0) return buf.toString('utf8')
+  const parts = []
+  for (let i = 0; i < starts.length; i += 1) {
+    const end = i + 1 < starts.length ? starts[i + 1] : buf.length
+    try {
+      parts.push(zstdDecompressSync(buf.subarray(starts[i], end)))
+    } catch {
+      // 帧内部的伪魔数把这一帧切坏了，丢这一帧即可
+    }
+  }
+  return Buffer.concat(parts).toString('utf8')
+}
+
 function sessionsRoot() {
   // DSH_HOME 是命令行/插件注入的，宿主进程里不一定有；homedir() 在任何进程里都成立，
   // 所以兜底用它而不是 USERPROFILE（后者在 Electron 里也可能缺失）。
@@ -650,9 +678,7 @@ function workspaceOf(input) {
   const file = wanted !== '' ? findSessionFile(wanted) : latestSessionFile()
   if (!file) return { root: '', source: 'none' }
   try {
-    const raw = file.endsWith('.zstd')
-      ? zstdDecompressSync(readFileSync(file)).toString('utf8')
-      : readFileSync(file, 'utf8')
+    const raw = readSessionText(file)
     const cut = raw.indexOf('\n')
     const head = JSON.parse(cut > 0 ? raw.slice(0, cut) : raw)
     const cwd = typeof head?.cwd === 'string' ? head.cwd : ''
@@ -783,9 +809,7 @@ function relativeUnder(path, root) {
 function sessionFiles(file, root) {
   let text = ''
   try {
-    text = file.endsWith('.zstd')
-      ? zstdDecompressSync(readFileSync(file)).toString('utf8')
-      : readFileSync(file, 'utf8')
+    text = readSessionText(file)
   } catch {
     return null
   }
