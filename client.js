@@ -608,7 +608,11 @@ window.__ModuleLoader__.load({
                   h(
                     'span',
                     { className: 'dsk-ico' },
-                    entry.isDir ? h(FolderIcon, null) : h(FileIcon, { name: entry.name }),
+                    entry.isDir
+              ? h(FolderIcon, null)
+              : appIcons[entry.path]
+                ? h('img', { className: 'dsk-appicon', src: appIcons[entry.path], alt: '' })
+                : h(FileIcon, { name: entry.name }),
                   ),
                   h('span', { className: 'dsk-name' }, entry.name),
                   entry.isDir
@@ -1130,7 +1134,65 @@ window.__ModuleLoader__.load({
     }) {
       const entries = data?.entries ?? [];
 
-      const renderRow = (entry) => {
+      // 目录页原来只会画通用文档图标，桌面上的 .lnk / .exe 全是一个样。
+      // 这里按当前目录批量问宿主拿真图标（宿主那边有缓存，重复进目录不会再起 PowerShell）。
+      const [appIcons, setAppIcons] = useState({});
+      useEffect(() => {
+        const wanted = entries
+          .filter((e) => !e.isDir && /\.(exe|lnk|url|bat|cmd|msc|appref-ms)$/i.test(e.name))
+          .map((e) => e.path);
+        if (wanted.length === 0) return undefined;
+        let alive = true;
+        call('icons', { paths: wanted })
+          .then((map) => {
+            if (alive && map) setAppIcons(map);
+          })
+          .catch(() => {
+            // 图标拿不到就用通用图标兜着，不影响列表
+          });
+        return () => {
+          alive = false;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+      }, [data]);
+
+      // 树状浏览：目录行点一下就展开子项，不用整页跳走。
+      // 子目录内容按需拉（ls 端点），拉过就缓存，折叠再展开不重复请求。
+      const [tree, setTree] = useState({});
+      const [expanded, setExpanded] = useState(() => new Set());
+      const [busy, setBusy] = useState({});
+
+      useEffect(() => {
+        // 换目录就清空，否则会拿上一个目录的展开状态去渲染新目录
+        setTree({});
+        setExpanded(new Set());
+        setBusy({});
+      }, [path]);
+
+      const toggleDir = async (entry) => {
+        const target = entry.path;
+        if (expanded.has(target)) {
+          setExpanded((prev) => {
+            const next = new Set(prev);
+            next.delete(target);
+            return next;
+          });
+          return;
+        }
+        setExpanded((prev) => new Set(prev).add(target));
+        if (Object.prototype.hasOwnProperty.call(tree, target)) return;
+        setBusy((prev) => ({ ...prev, [target]: true }));
+        try {
+          const res = await call('ls', { path: target });
+          setTree((prev) => ({ ...prev, [target]: res?.entries ?? [] }));
+        } catch {
+          setTree((prev) => ({ ...prev, [target]: null }));
+        } finally {
+          setBusy((prev) => ({ ...prev, [target]: false }));
+        }
+      };
+
+      const renderRow = (entry, depth = 0) => {
         const measured = sizes[entry.path];
         const sizeText = layout.compact
           ? ''
@@ -1145,11 +1207,14 @@ window.__ModuleLoader__.load({
             key: entry.path,
             className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
             title: entry.path,
+            style: { paddingLeft: 6 + depth * 16 },
             draggable: !entry.isDir,
             onMouseDown: entry.isDir ? undefined : () => prefetchDrag(entry.path, entry.size),
             onDragStart: entry.isDir ? undefined : (event) => startDrag(event, entry),
             onDragEnd: entry.isDir ? undefined : endDrag,
-            onClick: () => (entry.isDir ? onEnter(entry.path) : onOpen(entry)),
+            // 单击目录就地展开/收起；想整页进入目录用双击
+            onClick: () => (entry.isDir ? void toggleDir(entry) : onOpen(entry)),
+            onDoubleClick: entry.isDir ? () => onEnter(entry.path) : undefined,
             onContextMenu: (event) => {
               event.preventDefault();
               event.stopPropagation();
@@ -1158,8 +1223,17 @@ window.__ModuleLoader__.load({
           },
           h(
             'span',
+            { style: { width: 12, flex: '0 0 auto', fontSize: 10, opacity: 0.7 } },
+            entry.isDir ? (expanded.has(entry.path) ? '▾' : '▸') : '',
+          ),
+          h(
+            'span',
             { className: 'dsk-ico' },
-            entry.isDir ? h(FolderIcon, null) : h(FileIcon, { name: entry.name }),
+            entry.isDir
+              ? h(FolderIcon, null)
+              : appIcons[entry.path]
+                ? h('img', { className: 'dsk-appicon', src: appIcons[entry.path], alt: '' })
+                : h(FileIcon, { name: entry.name }),
           ),
           h('span', { className: 'dsk-name' }, entry.name),
           entry.isDir && !layout.compact
@@ -1221,11 +1295,44 @@ window.__ModuleLoader__.load({
             ? h('div', { className: error === HOST_HINT ? 'dsk-err-host' : 'dsk-err' }, error)
             : null,
           loading && entries.length === 0 ? h('div', { className: 'dsk-empty' }, '读取目录…') : null,
-          rows.map((node) =>
-            node.kind === 'group'
-              ? h('div', { key: node.key, className: 'dsk-group' }, node.label)
-              : renderRow(node.entry),
-          ),
+          (() => {
+            // 把「扁平 rows + 已展开的子树」摊成一张有序的可见行清单
+            const out = [];
+            const walk = (list, depth) => {
+              for (const node of list) {
+                if (node.kind === 'group') {
+                  out.push({ kind: 'group', key: node.key, label: node.label, depth });
+                  continue;
+                }
+                out.push({ kind: 'row', key: node.key, entry: node.entry, depth });
+                const target = node.entry.path;
+                if (!node.entry.isDir || !expanded.has(target)) continue;
+                if (busy[target]) {
+                  out.push({ kind: 'note', key: `${node.key}:busy`, text: '读取中…', depth: depth + 1 });
+                  continue;
+                }
+                const kids = tree[target];
+                if (kids === null) {
+                  out.push({ kind: 'note', key: `${node.key}:err`, text: '这个目录打不开', depth: depth + 1 });
+                  continue;
+                }
+                if (kids === undefined) continue;
+                walk(kids.map((child) => ({ kind: 'row', key: child.path, entry: child })), depth + 1);
+              }
+            };
+            walk(rows, 0);
+            return out.map((node) =>
+              node.kind === 'group'
+                ? h('div', { key: node.key, className: 'dsk-group' }, node.label)
+                : node.kind === 'note'
+                  ? h(
+                      'div',
+                      { key: node.key, className: 'dsk-hint', style: { paddingLeft: 6 + node.depth * 16, marginBottom: 0 } },
+                      node.text,
+                    )
+                  : renderRow(node.entry, node.depth),
+            );
+          })(),
           entries.length === 0 && !loading && !error ? h('div', { className: 'dsk-empty' }, '空目录') : null,
           data?.truncated ? h('div', { className: 'dsk-empty' }, '条目过多，只显示前 800 项') : null,
         ),
@@ -1799,6 +1906,31 @@ window.__ModuleLoader__.load({
 
     // ---------- 会话头入口：桌面 ----------
     // 桌面路径问宿主拿（可能被 OneDrive 重定向），拿到后开一个停在桌面的磁盘标签页。
+    // 桌面文件用「显示器」，工作区用「层叠文件夹」——两个入口原来都是文件夹，
+    // 摆在一排里根本分不出点哪个。形状差异比颜色差异在 18px 下更好认。
+    function MonitorIcon({ size = 18 }) {
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
+        h('rect', { x: 3, y: 4.5, width: 18, height: 12, rx: 1.8, stroke: 'currentColor', strokeWidth: 1.6 }),
+        h('path', { d: 'M9 20h6M12 16.5V20', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' }),
+      );
+    }
+
+    function StackFolderIcon({ size = 18 }) {
+      return h(
+        'svg',
+        { width: size, height: size, viewBox: '0 0 24 24', fill: 'none', 'aria-hidden': 'true' },
+        h('path', {
+          d: 'M3 8.5A1.5 1.5 0 0 1 4.5 7H8l1.6 2h4.9A1.5 1.5 0 0 1 16 10.5V15a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 3 15V8.5Z',
+          stroke: 'currentColor',
+          strokeWidth: 1.6,
+          strokeLinejoin: 'round',
+        }),
+        h('path', { d: 'M7 18.5h11A1.5 1.5 0 0 0 19.5 17V10', stroke: 'currentColor', strokeWidth: 1.6, strokeLinecap: 'round' }),
+      );
+    }
+
     function DesktopButton({ nav }) {
       return h(
         'button',
@@ -1818,7 +1950,7 @@ window.__ModuleLoader__.load({
             })();
           },
         },
-        h('span', { className: 'dsk-ico', style: { width: 18, height: 18 } }, h(FolderIcon, null)),
+        h('span', { className: 'dsk-ico', style: { width: 18, height: 18 } }, h(MonitorIcon, { size: 18 })),
       );
     }
 
@@ -2102,7 +2234,7 @@ window.__ModuleLoader__.load({
             }
           },
         },
-        h(WorkspaceIcon, { size: 18 }),
+        h(StackFolderIcon, { size: 18 }),
       );
     }
 
