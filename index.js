@@ -562,6 +562,17 @@ const TREE_IGNORE = new Set([
 ])
 const TREE_IGNORE_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini'])
 
+// 只列产出物，不列代码和配置。别人的会话里 90% 的文件操作都落在 .js/.json/.yml 上，
+// 全列出来等于把面板变成 git diff，反而不想看。
+const DOC_EXT = new Set([
+  'md', 'markdown', 'txt', 'pdf', 'rtf', 'epub',
+  'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx',
+  'odt', 'ods', 'odp',
+  'html', 'htm',
+  'png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'bmp',
+  'mp4', 'mov', 'webm', 'mp3', 'wav',
+])
+
 function sessionsRoot() {
   // DSH_HOME 是命令行/插件注入的，宿主进程里不一定有；homedir() 在任何进程里都成立，
   // 所以兜底用它而不是 USERPROFILE（后者在 Electron 里也可能缺失）。
@@ -729,11 +740,15 @@ const SESSION_SCAN_MAX = 24
 const SESSION_FILE_MAX = 400
 
 function collectPaths(raw, root) {
-  const lowerRoot = root.toLowerCase()
+  // 工具调用里的路径写法不统一：ops_glob / ops_bash 那类给的是 `D:/prodcut/...`（正斜杠），
+  // 会话 cwd 却是 `D:\prodcut\...`（反斜杠），直接 includes 永远不命中，整个面板就是空的。
+  // 统一成正斜杠再比，命中后仍然返回原始字符串。
+  const lowerRoot = root.replace(/\\/g, '/').toLowerCase()
   const found = new Set()
   const visit = (value) => {
     if (typeof value === 'string') {
-      if (value.length > 3 && value.length < 600 && value.toLowerCase().includes(lowerRoot)) {
+      const flat = value.replace(/\\/g, '/')
+      if (flat.length > 3 && flat.length < 600 && flat.toLowerCase().includes(lowerRoot)) {
         found.add(value)
       }
       return
@@ -775,6 +790,7 @@ function sessionFiles(file, root) {
   const lines = text.split('\n')
   let cwd = ''
   let title = ''
+  let skipped = 0
   const hits = new Map() // 相对路径 → 最后一次出现的时间
   for (const line of lines) {
     if (line === '') continue
@@ -814,10 +830,17 @@ function sessionFiles(file, root) {
     if (!st.isFile()) continue
     const segments = rel.split('/')
     if (segments.some((part) => TREE_IGNORE.has(part))) continue
+    // 只要产出物：文档、表格、演示、图片、音视频。
+    // 代码和配置（js/ts/json/yml/css/py/sh…）不列 —— 那些是干活过程，不是聊出来的东西。
+    const ext = (rel.split('.').pop() || '').toLowerCase()
+    if (!DOC_EXT.has(ext)) {
+      skipped += 1
+      continue
+    }
     files.push({ path: full, rel, name: segments[segments.length - 1], size: st.size, mtime: st.mtimeMs, at })
   }
   files.sort((a, b) => b.at - a.at)
-  return { cwd, title, files }
+  return { cwd, title, files, skipped }
 }
 
 // 会话目录名就是工作区路径的编码：`D:\prodcut\DSH原生官方\插件`
