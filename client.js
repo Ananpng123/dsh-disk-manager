@@ -2215,7 +2215,8 @@ window.__ModuleLoader__.load({
         h(
           'div',
           { className: 'dsk-body', onClick: () => setMenu(null) },
-          loading
+          // 只有首次（还没有任何分组）才铺满 loading；刷新时保留旧列表，数据到了直接替换，避免整屏闪一下
+          loading && groups.length === 0
             ? h('div', { className: 'dsk-empty' }, '正在扫描会话记录…')
             : rows.length === 0
               ? h(
