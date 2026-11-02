@@ -117,7 +117,7 @@ window.__ModuleLoader__.load({
 .dsk-vol-main{flex:1 1 auto;min-width:0;padding-top:1px}
 .dsk-vol-head{display:flex;align-items:baseline;gap:8px}
 .dsk-vol-title{flex:1 1 auto;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsk-pct{flex:0 0 auto;font-size:11px;font-variant-numeric:tabular-nums;opacity:.7}
+.dsk-pct{flex:1 1 46px;min-width:42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right}
 .dsk-diskicon{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px}
 .dsk-shortcut .dsk-diskicon svg{width:26px;height:26px}
 .dsk-inline-list{padding:2px 6px 8px;max-width:max(280px,50%);min-height:28px}
@@ -143,18 +143,18 @@ window.__ModuleLoader__.load({
 .dsk-appicon{width:16px;height:16px;object-fit:contain}
 .dsk-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .dsk-gap{flex:1 1 auto;min-width:0}
-.dsk-row-vol .dsk-name{flex:1 1 44%;min-width:80px}
-.dsk-size{flex:0 0 68px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.dsk-row-vol .dsk-name{flex:0 1 38%;min-width:72px}
+.dsk-size{flex:1 1 62px;min-width:56px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 /* 体积占比条：P1 唯一新增的视觉元素。空条表示还没算出来，不画成 0 长度实心条误导 */
 .dsk-map{width:100%;height:100%;display:block}
 .dsk-map .blk{cursor:pointer}
 .dsk-map .blk rect{stroke:var(--dsw-alias-bg-layer-1,#fff);stroke-width:1.5}
 .dsk-map .blk:hover rect{stroke:var(--dsw-alias-brand-primary,#0078d4);stroke-width:2}
 .dsk-map .blk text{fill:#fff;font-size:11px;pointer-events:none}
-.dsk-ratio{flex:0 0 80px;height:5px;border-radius:3px;margin-left:8px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
+.dsk-ratio{flex:0 0 76px;height:5px;border-radius:3px;margin-left:8px;margin-right:8px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
 .dsk-pct{flex:0 0 42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;margin-left:6px}
 .dsk-ratio i{display:block;height:100%;width:0;border-radius:2px;background:var(--dsw-alias-brand-primary,#0078d4);transition:width .25s ease}
-.dsk-calc{flex:0 0 46px;font-size:10.5px;padding:1px 0;border-radius:5px;cursor:pointer;border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.24));background:transparent;color:var(--label-dim,rgba(128,128,128,.75));text-align:center;margin-left:8px}
+.dsk-calc{flex:0 0 46px;margin-left:8px;font-size:10.5px;padding:1px 0;border-radius:5px;cursor:pointer;border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.24));background:transparent;color:var(--label-dim,rgba(128,128,128,.75));text-align:center}
 .dsk-calc:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16));color:inherit}
 .dsk-path{flex:1 1 auto;font-size:11px;opacity:.6;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
 .dsk-tabtitle{display:inline-block;flex:0 1 auto;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:bottom}
@@ -1413,8 +1413,6 @@ window.__ModuleLoader__.load({
                 title: '统计这个目录的大小',
               }, measured ? '重算' : '算大小')
             : null,
-          // 弹性空白放在「重算」之后：这样重算左对齐，大小仍然贴右边
-          h('span', { className: 'dsk-gap' }),
           h('span', { className: 'dsk-size' }, sizeText),
         );
       };
