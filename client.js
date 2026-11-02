@@ -1283,7 +1283,7 @@ window.__ModuleLoader__.load({
           return h('div', { className: 'dsk-empty' }, '体积还在算，等几秒再切过来');
         }
 
-        const boxes = boxLayout(list, 0, 0, 100, 100, true);
+        const boxes = boxLayout(list, 0, 0, 100, 100);
         return h(
           'div',
           { style: { position: 'relative', width: '100%', height: '100%', minHeight: '240px' } },
@@ -1303,7 +1303,7 @@ window.__ModuleLoader__.load({
                   top: `${box.y}%`,
                   width: `${box.w}%`,
                   height: `${box.h}%`,
-                  padding: '2px',
+                  padding: '1px',
                   boxSizing: 'border-box',
                   cursor: 'pointer',
                 },
@@ -1316,7 +1316,8 @@ window.__ModuleLoader__.load({
                     height: '100%',
                     borderRadius: '4px',
                     background: boxColor(box.item.entry),
-                    color: '#fff',
+                    color: '#000',
+                    border: '1px solid rgba(0,0,0,.18)',
                     fontSize: '11px',
                     lineHeight: '1.35',
                     padding: '5px',
@@ -1325,7 +1326,6 @@ window.__ModuleLoader__.load({
                     display: 'flex',
                     flexDirection: 'column',
                     gap: '1px',
-                    boxShadow: 'inset 0 0 0 1px rgba(0,0,0,.15)',
                   },
                 },
                 wide
@@ -1519,19 +1519,14 @@ window.__ModuleLoader__.load({
       );
     }
 
-    // 方块配色：目录统一蓝，文件按扩展名散列到固定色板，同一个后缀颜色恒定
-    const BOX_COLORS = ['#4c8dff', '#3ecf8e', '#f59e0b', '#c084fc', '#ff6b6b', '#22b8cf', '#f783ac', '#94a3b8'];
-    function boxColor(entry) {
-      if (entry.isDir) return '#4c8dff';
-      const ext = (entry.name.split('.').pop() || '').toLowerCase();
-      let hash = 0;
-      for (const ch of ext) hash = (hash * 31 + ch.charCodeAt(0)) % 997;
-      return BOX_COLORS[hash % BOX_COLORS.length];
+    // 方块配色：统一纯白底，方块之间靠 1px 间隙区分；文字纯黑
+    function boxColor() {
+      return '#ffffff';
     }
 
     // 二分切分：每次按体积把当前矩形切成两半，交替横竖切。
     // 不是 squarified，但「面积 = 体积」这个性质成立，够用且好懂。
-    function boxLayout(items, x, y, w, h, horizontal) {
+    function boxLayout(items, x, y, w, h) {
       if (items.length === 0) return [];
       if (items.length === 1) return [{ item: items[0], x, y, w, h }];
       const total = items.reduce((sum, i) => sum + i.size, 0) || 1;
@@ -1549,18 +1544,14 @@ window.__ModuleLoader__.load({
       const tail = items.slice(split);
       const headTotal = head.reduce((sum, i) => sum + i.size, 0);
       const ratio = headTotal / total;
+      // 宽了就横切、高了就竖切：每块长宽比更接近 1，小项不会挤成面条
+      const horizontal = w >= h;
       if (horizontal) {
         const cut = w * ratio;
-        return [
-          ...boxLayout(head, x, y, cut, h, false),
-          ...boxLayout(tail, x + cut, y, w - cut, h, false),
-        ];
+        return [...boxLayout(head, x, y, cut, h), ...boxLayout(tail, x + cut, y, w - cut, h)];
       }
       const cut = h * ratio;
-      return [
-        ...boxLayout(head, x, y, w, cut, true),
-        ...boxLayout(tail, x, y + cut, w, h - cut, true),
-      ];
+      return [...boxLayout(head, x, y, w, cut), ...boxLayout(tail, x, y + cut, w, h - cut)];
     }
 
     // ---------- tab 正文 ----------
