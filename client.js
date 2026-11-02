@@ -2013,6 +2013,11 @@ window.__ModuleLoader__.load({
           } else if (kind === 'open') await call('open', { path: target.path });
           else if (kind === 'reveal') await call('reveal', { path: target.path });
           else if (kind === 'copy') await call('clipboard', { text: target.path });
+          else if (kind === 'delete') {
+            if (!window.confirm(`把这个文件放进回收站？\n${target.name}`)) return;
+            await call('trash', { path: target.path });
+            void load();
+          }
         } catch (err) {
           setError(friendlyError(err));
         }
@@ -2072,6 +2077,7 @@ window.__ModuleLoader__.load({
                 },
               },
               h('span', { className: 'dsk-name' }, file.name),
+              h('span', { className: 'dsk-badge', title: '创建时间' }, fmtTime(file.birthtime || file.mtime)),
               h('span', { className: 'dsk-badge' }, fmtBytes(file.size)),
             ),
           );
@@ -2132,6 +2138,11 @@ window.__ModuleLoader__.load({
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, '用系统程序打开'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('reveal') }, '在资源管理器中显示'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('copy') }, '复制路径'),
+              h(
+                'div',
+                { className: 'dsk-mitem dsk-mitem-danger', onMouseDown: () => void menuAction('delete') },
+                '删除（进回收站）',
+              ),
             ),
       );
     }

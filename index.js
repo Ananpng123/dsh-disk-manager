@@ -874,9 +874,19 @@ function sessionFiles(file, root) {
       skipped += 1
       continue
     }
-    files.push({ path: full, rel, name: segments[segments.length - 1], size: st.size, mtime: st.mtimeMs, at })
+    files.push({
+      path: full,
+      rel,
+      name: segments[segments.length - 1],
+      size: st.size,
+      mtime: st.mtimeMs,
+      // birthtimeMs 才是真正的创建时间；有些文件系统给 0，那就退回修改时间
+      birthtime: st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs,
+      at,
+    })
   }
-  files.sort((a, b) => b.at - a.at)
+  // 面板按创建时间倒序：最近做出来的文件排在最上面
+  files.sort((a, b) => (b.birthtime || b.at) - (a.birthtime || a.at))
   return { cwd, title, files, skipped, calls, hits: hits.size, types, head: text.slice(0, 160) }
 }
 
