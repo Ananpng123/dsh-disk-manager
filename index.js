@@ -785,6 +785,8 @@ function listTree(input) {
 
 const SESSION_SCAN_MAX = 24
 const SESSION_FILE_MAX = 400
+// 「其他文档」最多列这么多：工作区里常年累月攒下的文档可能上千个，全列出来只是噪音
+const LOOSE_MAX = 150
 // 每次改宿主侧逻辑就换一个，面板诊断里会显示，用来确认真机跑的是哪一版
 const BUILD_TAG = 'v9'
 
@@ -1032,6 +1034,54 @@ function listSessionGroups(input) {
     })
   }
   groups.sort((a, b) => b.mtime - a.mtime)
+
+  // 补充来源：工作区里确实存在、但没被任何会话记录碰过的文档。
+  // 会话记录只覆盖「在 DSH 里动过的文件」；手工放进去的、别的工具写的、Obsidian 同步过来的
+  // 都不会出现在里面 —— 那类文件在这里兜住，统一放进「其他文档」。
+  let looseCount = 0
+  const known = new Set()
+  for (const group of groups) {
+    for (const file of group.files) known.add(file.path.toLowerCase())
+  }
+  const looseTree = listTree({ root })
+  const looseAll = []
+  for (const entry of looseTree.entries) {
+    if (entry.isDir) continue
+    const ext = (entry.name.split('.').pop() || '').toLowerCase()
+    if (!DOC_EXT.has(ext)) continue
+    if (known.has(entry.path.toLowerCase())) continue
+    let birthtime = entry.mtime
+    try {
+      const st = statSync(entry.path)
+      if (st.birthtimeMs > 0) birthtime = st.birthtimeMs
+    } catch {
+      continue
+    }
+    looseAll.push({
+      path: entry.path,
+      rel: entry.rel,
+      name: entry.name,
+      size: entry.size,
+      mtime: entry.mtime,
+      birthtime,
+      at: entry.mtime,
+    })
+    if (looseAll.length >= LOOSE_MAX) break
+  }
+  looseAll.sort((a, b) => (b.birthtime || b.mtime) - (a.birthtime || a.mtime))
+  const loose = looseAll.slice(0, LOOSE_MAX)
+  looseCount = loose.length
+  if (loose.length > 0) {
+    groups.push({
+      id: '__loose__',
+      title: '其他文档（会话没碰过的）',
+      files: loose,
+      count: loose.length,
+      mtime: 0,
+      loose: true,
+    })
+  }
+
   return {
     root,
     groups,
@@ -1045,6 +1095,7 @@ function listSessionGroups(input) {
     build: BUILD_TAG,
     tally,
     sample,
+    looseCount,
   }
 }
 
