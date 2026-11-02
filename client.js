@@ -2077,8 +2077,12 @@ window.__ModuleLoader__.load({
                 },
               },
               h('span', { className: 'dsk-name' }, file.name),
-              h('span', { className: 'dsk-badge', title: '创建时间' }, fmtTime(file.birthtime || file.mtime)),
-              h('span', { className: 'dsk-badge' }, fmtBytes(file.size)),
+              h(
+                'span',
+                { className: 'dsk-badge', title: '创建时间', style: { fontWeight: 400, fontSize: 12, letterSpacing: 0, opacity: 0.55, fontVariantNumeric: 'tabular-nums' } },
+                fmtTime(file.birthtime || file.mtime),
+              ),
+              h('span', { className: 'dsk-badge', style: { fontWeight: 400, fontSize: 12, letterSpacing: 0, opacity: 0.55, fontVariantNumeric: 'tabular-nums' } }, fmtBytes(file.size)),
             ),
           );
         }
