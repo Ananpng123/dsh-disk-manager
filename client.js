@@ -135,6 +135,9 @@ window.__ModuleLoader__.load({
 .dsk-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16))}
 .dsk-row-sel{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.22));box-shadow:inset 2px 0 0 var(--dsw-alias-brand-primary,#0078d4)}
 .dsk-selbar{display:flex;align-items:center;gap:8px;padding:4px 10px 8px;font-size:12px}
+.dsk-check{flex:0 0 auto;width:16px;text-align:center;cursor:pointer;opacity:.28;font-size:11px;line-height:1;user-select:none}
+.dsk-check:hover{opacity:.75}
+.dsk-check-on{opacity:1;color:var(--dsw-alias-brand-primary,#0078d4)}
 .dsk-row-dir{cursor:pointer}
 .dsk-ico{flex:0 0 auto;display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center}
 .dsk-appicon{width:16px;height:16px;object-fit:contain}
@@ -2067,6 +2070,15 @@ window.__ModuleLoader__.load({
         });
       };
 
+      const toggleSelect = (target) => {
+        setSelected((prev) => {
+          const next = new Set(prev);
+          if (next.has(target)) next.delete(target);
+          else next.add(target);
+          return next;
+        });
+      };
+
       const batchDelete = async () => {
         const paths = [...selected];
         if (paths.length === 0) return;
@@ -2096,13 +2108,27 @@ window.__ModuleLoader__.load({
           else if (kind === 'reveal') await call('reveal', { path: target.path });
           else if (kind === 'copy') await call('clipboard', { text: target.path });
           else if (kind === 'delete') {
-            if (!window.confirm(`把这个文件放进回收站？\n${target.name}`)) return;
-            await call('trash', { path: target.path });
-            setSelected((prev) => {
-              const next = new Set(prev);
-              next.delete(target.path);
-              return next;
-            });
+            // 右键项在选中集合里、且选了好几个，就按整批删；
+            // 只右键单个文件时不牵连其它已选项。
+            const batch = selected.size > 1 && selected.has(target.path);
+            const paths = batch ? [...selected] : [target.path];
+            const ask = batch
+              ? `把这 ${paths.length} 个文件放进回收站？`
+              : `把这个文件放进回收站？\n${target.name}`;
+            if (!window.confirm(ask)) return;
+            if (batch) {
+              const result = await call('trashMany', { paths });
+              const failed = (result?.failed || []).length;
+              if (failed > 0) setError(`有 ${failed} 个文件没能删掉，可能正被别的程序占用`);
+              setSelected(new Set());
+            } else {
+              await call('trash', { path: target.path });
+              setSelected((prev) => {
+                const next = new Set(prev);
+                next.delete(target.path);
+                return next;
+              });
+            }
             void load();
           }
         } catch (err) {
@@ -2142,12 +2168,7 @@ window.__ModuleLoader__.load({
                 style: { paddingLeft: 26 },
                 onClick: async (event) => {
                   if (event.metaKey || event.ctrlKey) {
-                    setSelected((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(file.path)) next.delete(file.path);
-                      else next.add(file.path);
-                      return next;
-                    });
+                    toggleSelect(file.path);
                     return;
                   }
                   // 优先用 DSH 内置的资源预览打开，别把用户甩到外部程序去。
@@ -2172,6 +2193,18 @@ window.__ModuleLoader__.load({
                   setMenu({ x: event.clientX, y: event.clientY, entry: file });
                 },
               },
+              h(
+                'span',
+                {
+                  className: `dsk-check${selected.has(file.path) ? ' dsk-check-on' : ''}`,
+                  title: '选中',
+                  onClick: (event) => {
+                    event.stopPropagation();
+                    toggleSelect(file.path);
+                  },
+                },
+                selected.has(file.path) ? '✓' : '○',
+              ),
               h('span', { className: 'dsk-ico' }, h(FileIcon, { name: file.name })),
               h('span', { className: 'dsk-name' }, file.name),
               h('span', { className: 'dsk-size', title: '创建时间' }, fmtTime(file.birthtime || file.mtime)),
@@ -2253,7 +2286,9 @@ window.__ModuleLoader__.load({
               h(
                 'div',
                 { className: 'dsk-mitem dsk-mitem-danger', onMouseDown: () => void menuAction('delete') },
-                '删除（进回收站）',
+                selected.size > 1 && selected.has(menu.entry.path)
+                  ? `删除选中的 ${selected.size} 个文件（进回收站）`
+                  : '删除（进回收站）',
               ),
             ),
       );
