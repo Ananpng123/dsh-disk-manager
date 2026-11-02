@@ -31,7 +31,7 @@ export const inject = []
 const ROUTE = '/api/dsh-disk'
 const LETTERS = 'CDEFGHIJKLMNOPQRSTUVWXYZ'
 const LIST_LIMIT = 800
-const LABEL_TTL_MS = 60_000
+const LABEL_TTL_MS = 300_000
 const SIZE_MAX_MS = 20_000
 
 const execFileAsync = promisify(execFile)
@@ -395,7 +395,7 @@ async function shortcutIcons(input) {
 // 所以问系统要。结果缓存一分钟，按钮连点不会每次都起 PowerShell。
 async function desktopPath() {
   const now = Date.now()
-  if (desktopCache.path !== '' && now - desktopCache.at < 60_000) return { path: desktopCache.path }
+  if (desktopCache.path !== '' && now - desktopCache.at < 300_000) return { path: desktopCache.path }
   try {
     const { stdout } = await execFileAsync(
       'powershell.exe',
@@ -579,6 +579,27 @@ const DOC_EXT = new Set([
 // 这里自己按帧魔数切开逐帧解，谁家的 Node 都能读全；解不出的帧直接跳过。
 const ZSTD_MAGIC = Buffer.from([0x28, 0xb5, 0x2f, 0xfd])
 
+// 只解第一帧。workspace 端点要的 cwd 就在第一行，而整份记录常有 6 MB / 4000 帧，
+// 全解一次 190 ms，只解一帧是几毫秒。
+function readSessionHead(file) {
+  const buf = readFileSync(file)
+  if (!file.endsWith('.zstd')) {
+    const cut = buf.indexOf(10)
+    return (cut >= 0 ? buf.subarray(0, cut) : buf).toString('utf8')
+  }
+  const first = buf.indexOf(ZSTD_MAGIC)
+  if (first < 0) return ''
+  const second = buf.indexOf(ZSTD_MAGIC, first + 4)
+  const end = second >= 0 ? second : buf.length
+  try {
+    const text = zstdDecompressSync(buf.subarray(first, end)).toString('utf8')
+    const cut = text.indexOf('\n')
+    return cut >= 0 ? text.slice(0, cut) : text
+  } catch {
+    return ''
+  }
+}
+
 function readSessionText(file) {
   const buf = readFileSync(file)
   if (!file.endsWith('.zstd')) return buf.toString('utf8')
@@ -678,9 +699,9 @@ function workspaceOf(input) {
   const file = wanted !== '' ? findSessionFile(wanted) : latestSessionFile()
   if (!file) return { root: '', source: 'none' }
   try {
-    const raw = readSessionText(file)
-    const cut = raw.indexOf('\n')
-    const head = JSON.parse(cut > 0 ? raw.slice(0, cut) : raw)
+    const line = readSessionHead(file)
+    if (line === '') return { root: '', source: 'none' }
+    const head = JSON.parse(line)
     const cwd = typeof head?.cwd === 'string' ? head.cwd : ''
     return { root: cwd, source: cwd ? (wanted !== '' ? 'session' : 'latest') : 'none' }
   } catch (error) {
