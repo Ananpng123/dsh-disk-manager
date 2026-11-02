@@ -1906,7 +1906,7 @@ window.__ModuleLoader__.load({
     const WS_TYPE_ID = 'dsh-disk-manager/workspace';
     const WS_KIND = 'dsh-workspace';
 
-    function WorkspacePane({ sessionId }) {
+    function WorkspacePane({ sessionId, nav }) {
       const [root, setRoot] = useState('');
       const [groups, setGroups] = useState([]);
       const [open, setOpen] = useState(() => new Set());
@@ -2007,7 +2007,10 @@ window.__ModuleLoader__.load({
         setMenu(null);
         if (!target) return;
         try {
-          if (kind === 'open') await call('open', { path: target.path });
+          if (kind === 'preview') {
+            if (typeof nav?.openResource === 'function') nav.openResource(fileAddress(sessionId, target.path));
+            else await call('open', { path: target.path });
+          } else if (kind === 'open') await call('open', { path: target.path });
           else if (kind === 'reveal') await call('reveal', { path: target.path });
           else if (kind === 'copy') await call('clipboard', { text: target.path });
         } catch (err) {
@@ -2046,6 +2049,16 @@ window.__ModuleLoader__.load({
                 title: file.path,
                 style: { paddingLeft: 26 },
                 onClick: async () => {
+                  // 优先用 DSH 内置的资源预览打开，别把用户甩到外部程序去。
+                  // 内置预览认 dsh-resource://file/<路径> 这种地址；没有 nav 或它抛错时才退回系统程序。
+                  try {
+                    if (typeof nav?.openResource === 'function') {
+                      nav.openResource(fileAddress(sessionId, file.path));
+                      return;
+                    }
+                  } catch (err) {
+                    console.warn('[dsh-disk] 内置预览打开失败，退回系统程序', err);
+                  }
                   try {
                     await call('open', { path: file.path });
                   } catch (err) {
@@ -2058,7 +2071,7 @@ window.__ModuleLoader__.load({
                   setMenu({ x: event.clientX, y: event.clientY, entry: file });
                 },
               },
-              h('span', { className: 'dsk-name' }, file.rel),
+              h('span', { className: 'dsk-name' }, file.name),
               h('span', { className: 'dsk-badge' }, fmtBytes(file.size)),
             ),
           );
@@ -2115,7 +2128,8 @@ window.__ModuleLoader__.load({
                 style: { position: 'fixed', left: menu.x, top: menu.y, zIndex: 60 },
                 onMouseDown: (event) => event.stopPropagation(),
               },
-              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, '打开'),
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('preview') }, '在面板里预览'),
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, '用系统程序打开'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('reveal') }, '在资源管理器中显示'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('copy') }, '复制路径'),
             ),
@@ -2306,7 +2320,7 @@ window.__ModuleLoader__.load({
               guard('workspace tab body', () =>
                 slots.register(
                   { name: 'sidebar.right.pane.tab', key: WS_TYPE_ID },
-                  (props) => h(WorkspacePane, { sessionId: props?.sessionId }),
+                  (props) => h(WorkspacePane, { sessionId: props?.sessionId, nav: scope.sidebarRight ?? ctx.sidebarRight }),
                 ),
               ),
             'dsh-disk-manager: workspace tab body',
