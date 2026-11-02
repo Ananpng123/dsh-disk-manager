@@ -738,6 +738,8 @@ function listTree(input) {
 
 const SESSION_SCAN_MAX = 24
 const SESSION_FILE_MAX = 400
+// 每次改宿主侧逻辑就换一个，面板诊断里会显示，用来确认真机跑的是哪一版
+const BUILD_TAG = 'v8'
 
 function collectPaths(raw, root) {
   // 工具调用里的路径写法不统一：ops_glob / ops_bash 那类给的是 `D:/prodcut/...`（正斜杠），
@@ -961,6 +963,7 @@ function listSessionGroups(input) {
     buckets: buckets.length,
     matchedBuckets: bucketsToScan.length,
     candidates: candidates.length,
+    build: BUILD_TAG,
   }
 }
 

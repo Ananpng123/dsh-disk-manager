@@ -1965,6 +1965,7 @@ window.__ModuleLoader__.load({
             buckets: data?.buckets || 0,
             matched: data?.matchedBuckets || 0,
             candidates: data?.candidates || 0,
+            build: data?.build || '',
           });
           setOpen(new Set(list.length > 0 ? [list[0].id] : []));
           setLoading(false);
@@ -2109,7 +2110,7 @@ window.__ModuleLoader__.load({
           loading
             ? h('div', { className: 'dsk-empty' }, '正在扫描会话记录…')
             : rows.length === 0
-              ? h('div', { className: 'dsk-empty' }, q === '' ? `没有可列出的文件。扫描：会话目录 ${meta.home}（共 ${meta.buckets} 个工作区，匹配 ${meta.matched} 个），候选会话 ${meta.candidates} 个，扫描 ${meta.scanned} 个，命中分组 ${groups.length} 个。` : '没有匹配的文件')
+              ? h('div', { className: 'dsk-empty' }, q === '' ? `没有可列出的文件。扫描：会话目录 ${meta.home}（共 ${meta.buckets} 个工作区，匹配 ${meta.matched} 个），候选会话 ${meta.candidates} 个，扫描 ${meta.scanned} 个，命中分组 ${groups.length} 个。（host ${meta.build || '未知'}）` : '没有匹配的文件')
               : rows,
           meta.capped
             ? h('div', { className: 'dsk-more' }, `只扫描了最近 ${meta.scanned} 个会话，更早的没列出来`)
