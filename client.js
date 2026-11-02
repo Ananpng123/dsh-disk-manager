@@ -133,6 +133,8 @@ window.__ModuleLoader__.load({
 .dsk-vol-meta{font-size:11px;opacity:.55;font-variant-numeric:tabular-nums}
 .dsk-row{display:flex;align-items:center;gap:8px;height:28px;padding:0 6px;border-radius:6px;cursor:default}
 .dsk-row:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16))}
+.dsk-row-sel{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.22));box-shadow:inset 2px 0 0 var(--dsw-alias-brand-primary,#0078d4)}
+.dsk-selbar{display:flex;align-items:center;gap:8px;padding:4px 10px 8px;font-size:12px}
 .dsk-row-dir{cursor:pointer}
 .dsk-ico{flex:0 0 auto;display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center}
 .dsk-appicon{width:16px;height:16px;object-fit:contain}
@@ -1970,6 +1972,8 @@ window.__ModuleLoader__.load({
       const [error, setError] = useState('');
       const [meta, setMeta] = useState({ scanned: 0, capped: false });
       const [menu, setMenu] = useState(null);
+      // 多选：Ctrl/Cmd + 点行加入或移出，选中后顶部出现批量操作条
+      const [selected, setSelected] = useState(() => new Set());
       const alive = useRef(true);
 
       useEffect(() => {
@@ -2024,7 +2028,13 @@ window.__ModuleLoader__.load({
             tally: data?.tally || { read: 0, cwdMismatch: 0, calls: 0, hits: 0, skipped: 0, grouped: 0 },
             sample: data?.sample || null,
           });
-          setOpen(new Set(list.length > 0 ? [list[0].id] : []));
+          setOpen((prev) => {
+            // 刷新（比如删完文件）时保留用户已经展开的分组，只丢掉已经消失的
+            const ids = new Set(list.map((g) => g.id));
+            const kept = new Set();
+            for (const id of prev) if (ids.has(id)) kept.add(id);
+            return kept.size > 0 ? kept : new Set(list.length > 0 ? [list[0].id] : []);
+          });
           setLoading(false);
         } catch (err) {
           if (!alive.current) return;
@@ -2057,6 +2067,23 @@ window.__ModuleLoader__.load({
         });
       };
 
+      const batchDelete = async () => {
+        const paths = [...selected];
+        if (paths.length === 0) return;
+        if (!window.confirm(`把这 ${paths.length} 个文件放进回收站？`)) return;
+        let failed = 0;
+        for (const target of paths) {
+          try {
+            await call('trash', { path: target });
+          } catch {
+            failed += 1;
+          }
+        }
+        setSelected(new Set());
+        if (failed > 0) setError(`有 ${failed} 个文件没能删掉，可能正被别的程序占用`);
+        void load();
+      };
+
       const menuAction = async (kind) => {
         const target = menu?.entry;
         setMenu(null);
@@ -2071,6 +2098,11 @@ window.__ModuleLoader__.load({
           else if (kind === 'delete') {
             if (!window.confirm(`把这个文件放进回收站？\n${target.name}`)) return;
             await call('trash', { path: target.path });
+            setSelected((prev) => {
+              const next = new Set(prev);
+              next.delete(target.path);
+              return next;
+            });
             void load();
           }
         } catch (err) {
@@ -2105,10 +2137,19 @@ window.__ModuleLoader__.load({
               'div',
               {
                 key: `f:${group.id}:${file.rel}`,
-                className: 'dsk-row',
+                className: `dsk-row${selected.has(file.path) ? ' dsk-row-sel' : ''}`,
                 title: file.path,
                 style: { paddingLeft: 26 },
-                onClick: async () => {
+                onClick: async (event) => {
+                  if (event.metaKey || event.ctrlKey) {
+                    setSelected((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(file.path)) next.delete(file.path);
+                      else next.add(file.path);
+                      return next;
+                    });
+                    return;
+                  }
                   // 优先用 DSH 内置的资源预览打开，别把用户甩到外部程序去。
                   // 内置预览认 dsh-resource://file/<路径> 这种地址；没有 nav 或它抛错时才退回系统程序。
                   try {
@@ -2159,6 +2200,15 @@ window.__ModuleLoader__.load({
             onChange: (event) => setQuery(event.target.value),
           }),
         ),
+        selected.size > 0
+          ? h(
+              'div',
+              { className: 'dsk-selbar' },
+              h('span', { style: { flex: '1 1 auto' } }, `已选 ${selected.size} 个`),
+              h('button', { type: 'button', className: 'dsk-btn dsk-btn-danger', onClick: () => void batchDelete() }, '删除'),
+              h('button', { type: 'button', className: 'dsk-btn', onClick: () => setSelected(new Set()) }, '取消'),
+            )
+          : null,
         error !== ''
           ? h('div', { className: 'dsk-err', style: { margin: '0 10px 6px', fontSize: 12 }, title: error }, error)
           : null,
@@ -2186,7 +2236,13 @@ window.__ModuleLoader__.load({
               'div',
               {
                 className: 'dsk-menu',
-                style: { position: 'fixed', left: menu.x, top: menu.y, zIndex: 60 },
+                style: {
+                  position: 'fixed',
+                  // 贴着面板底部右键时，菜单原样往下展开会被截掉一半，所以先按视口反算
+                  left: Math.max(8, Math.min(menu.x, (window.innerWidth || 1200) - 208 - 8)),
+                  top: Math.max(8, Math.min(menu.y, (window.innerHeight || 800) - 190)),
+                  zIndex: 60,
+                },
                 onMouseDown: (event) => event.stopPropagation(),
               },
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('preview') }, '在面板里预览'),
