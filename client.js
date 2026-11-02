@@ -117,7 +117,7 @@ window.__ModuleLoader__.load({
 .dsk-vol-main{flex:1 1 auto;min-width:0;padding-top:1px}
 .dsk-vol-head{display:flex;align-items:baseline;gap:8px}
 .dsk-vol-title{flex:1 1 auto;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.dsk-pct{flex:1 1 46px;min-width:42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right}
+.dsk-pct{flex:0 0 52px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right}
 .dsk-diskicon{flex:0 0 auto;display:inline-flex;align-items:center;justify-content:center;width:34px;height:34px}
 .dsk-shortcut .dsk-diskicon svg{width:26px;height:26px}
 .dsk-inline-list{padding:2px 6px 8px;max-width:max(280px,50%);min-height:28px}
@@ -144,7 +144,7 @@ window.__ModuleLoader__.load({
 .dsk-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
 .dsk-gap{flex:1 1 auto;min-width:0}
 .dsk-row-vol .dsk-name{flex:0 1 38%;min-width:72px}
-.dsk-size{flex:1 1 62px;min-width:56px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.dsk-size{flex:0 0 74px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
 /* 体积占比条：P1 唯一新增的视觉元素。空条表示还没算出来，不画成 0 长度实心条误导 */
 .dsk-map{width:100%;height:100%;display:block}
 .dsk-map .blk{cursor:pointer}
@@ -1222,7 +1222,7 @@ window.__ModuleLoader__.load({
             }
           }
         };
-        for (let i = 0; i < 4; i += 1) void worker();
+        for (let i = 0; i < 3; i += 1) void worker();
         return () => {
           cancelled = true;
         };
@@ -1734,7 +1734,7 @@ window.__ModuleLoader__.load({
       const measure = useCallback(async (target) => {
         setSizes((prev) => ({ ...prev, [target]: prev[target] ?? null }));
         try {
-          const value = await call('size', { path: target, deadlineMs: 6000 });
+          const value = await call('size', { path: target, deadlineMs: 3000 });
           if (!alive.current) return;
           setSizes((prev) => ({ ...prev, [target]: value }));
         } catch (err) {
