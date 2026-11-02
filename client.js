@@ -1908,12 +1908,12 @@ window.__ModuleLoader__.load({
 
     function WorkspacePane({ sessionId }) {
       const [root, setRoot] = useState('');
-      const [entries, setEntries] = useState([]);
+      const [groups, setGroups] = useState([]);
       const [open, setOpen] = useState(() => new Set());
       const [query, setQuery] = useState('');
       const [loading, setLoading] = useState(true);
       const [error, setError] = useState('');
-      const [meta, setMeta] = useState({ truncated: false, count: 0 });
+      const [meta, setMeta] = useState({ scanned: 0, capped: false });
       const [menu, setMenu] = useState(null);
       const alive = useRef(true);
 
@@ -1933,17 +1933,18 @@ window.__ModuleLoader__.load({
           if (base === '') {
             if (!alive.current) return;
             setRoot('');
-            setEntries([]);
+            setGroups([]);
             setError('没找到这个会话对应的工作区目录。插件靠会话记录里的 cwd 定位，这个会话可能还没落盘。');
             setLoading(false);
             return;
           }
-          const tree = await call('tree', { root: base });
+          const data = await call('sessions', { root: base });
           if (!alive.current) return;
-          setRoot(tree?.root || base);
-          setEntries(Array.isArray(tree?.entries) ? tree.entries : []);
-          setMeta({ truncated: Boolean(tree?.truncated), count: tree?.count || 0 });
-          setOpen(new Set());
+          const list = Array.isArray(data?.groups) ? data.groups : [];
+          setRoot(data?.root || base);
+          setGroups(list);
+          setMeta({ scanned: data?.scanned || 0, capped: Boolean(data?.capped) });
+          setOpen(new Set(list.length > 0 ? [list[0].id] : []));
           setLoading(false);
         } catch (err) {
           if (!alive.current) return;
@@ -1967,46 +1968,13 @@ window.__ModuleLoader__.load({
         };
       }, [menu]);
 
-      // 树是深度优先拍平的，父节点一定排在子节点前面，所以「父级都展开才可见」可以一趟走完
-      const q = query.trim().toLowerCase();
-      const rows = [];
-      for (const entry of entries) {
-        const parts = entry.rel.split('/');
-        if (q === '') {
-          let visible = true;
-          for (let i = 1; i < parts.length; i += 1) {
-            if (!open.has(parts.slice(0, i).join('/'))) {
-              visible = false;
-              break;
-            }
-          }
-          if (!visible) continue;
-        } else if (!entry.rel.toLowerCase().includes(q)) {
-          continue;
-        }
-        rows.push({ entry, depth: parts.length - 1 });
-        if (rows.length >= 400) break;
-      }
-
-      const toggle = (rel) => {
+      const toggle = (id) => {
         setOpen((prev) => {
           const next = new Set(prev);
-          if (next.has(rel)) next.delete(rel);
-          else next.add(rel);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
           return next;
         });
-      };
-
-      const openEntry = async (entry) => {
-        if (entry.isDir) {
-          toggle(entry.rel);
-          return;
-        }
-        try {
-          await call('open', { path: entry.path });
-        } catch (err) {
-          setError(friendlyError(err));
-        }
       };
 
       const menuAction = async (kind) => {
@@ -2021,6 +1989,56 @@ window.__ModuleLoader__.load({
           setError(friendlyError(err));
         }
       };
+
+      const q = query.trim().toLowerCase();
+      const rows = [];
+      for (const group of groups) {
+        const files = q === '' ? group.files : group.files.filter((f) => f.rel.toLowerCase().includes(q));
+        if (files.length === 0) continue;
+        const expanded = q !== '' || open.has(group.id);
+        rows.push(
+          h(
+            'div',
+            {
+              key: `g:${group.id}`,
+              className: 'dsk-grouphead',
+              title: group.title,
+              onClick: () => toggle(group.id),
+            },
+            h('span', { style: { width: 14, flex: '0 0 auto', opacity: 0.7 } }, expanded ? '▾' : '▸'),
+            h('span', { className: 'dsk-name' }, group.title),
+            h('span', { className: 'dsk-badge' }, String(files.length)),
+          ),
+        );
+        if (!expanded) continue;
+        for (const file of files) {
+          rows.push(
+            h(
+              'div',
+              {
+                key: `f:${group.id}:${file.rel}`,
+                className: 'dsk-row',
+                title: file.path,
+                style: { paddingLeft: 26 },
+                onClick: async () => {
+                  try {
+                    await call('open', { path: file.path });
+                  } catch (err) {
+                    setError(friendlyError(err));
+                  }
+                },
+                onContextMenu: (event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  setMenu({ x: event.clientX, y: event.clientY, entry: file });
+                },
+              },
+              h('span', { className: 'dsk-name' }, file.rel),
+              h('span', { className: 'dsk-badge' }, fmtBytes(file.size)),
+            ),
+          );
+        }
+      }
 
       return h(
         'div',
@@ -2067,35 +2085,12 @@ window.__ModuleLoader__.load({
           'div',
           { className: 'dsk-body', onClick: () => setMenu(null) },
           loading
-            ? h('div', { className: 'dsk-empty' }, '正在扫描工作区…')
+            ? h('div', { className: 'dsk-empty' }, '正在扫描会话记录…')
             : rows.length === 0
-              ? h('div', { className: 'dsk-empty' }, q === '' ? '这个工作区里没有文件' : '没有匹配的文件')
-              : rows.map(({ entry, depth }) =>
-                  h(
-                    'div',
-                    {
-                      key: entry.rel,
-                      className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
-                      title: entry.path,
-                      style: { paddingLeft: 8 + depth * 14 },
-                      onClick: () => void openEntry(entry),
-                      onContextMenu: (event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        setMenu({ x: event.clientX, y: event.clientY, entry });
-                      },
-                    },
-                    h(
-                      'span',
-                      { style: { width: 14, flex: '0 0 auto', opacity: 0.7 } },
-                      entry.isDir ? (open.has(entry.rel) || q !== '' ? '▾' : '▸') : '',
-                    ),
-                    h('span', { className: 'dsk-name' }, entry.name),
-                    entry.isDir ? null : h('span', { className: 'dsk-badge' }, fmtBytes(entry.size)),
-                  ),
-                ),
-          meta.truncated
-            ? h('div', { className: 'dsk-more' }, `已到扫描上限（${meta.count} 项），更深或更多的内容没列出来`)
+              ? h('div', { className: 'dsk-empty' }, q === '' ? '这个工作区还没有会话碰过文件' : '没有匹配的文件')
+              : rows,
+          meta.capped
+            ? h('div', { className: 'dsk-more' }, `只扫描了最近 ${meta.scanned} 个会话，更早的没列出来`)
             : null,
         ),
         menu === null
@@ -2107,7 +2102,7 @@ window.__ModuleLoader__.load({
                 style: { position: 'fixed', left: menu.x, top: menu.y, zIndex: 60 },
                 onMouseDown: (event) => event.stopPropagation(),
               },
-              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, menu.entry.isDir ? '打开文件夹' : '打开'),
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, '打开'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('reveal') }, '在资源管理器中显示'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('copy') }, '复制路径'),
             ),

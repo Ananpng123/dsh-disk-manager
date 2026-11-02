@@ -668,6 +668,223 @@ function listTree(input) {
   }
 }
 
+// ── 按会话归类工作区文件 ────────────────────────────────────────────────────
+// 一个工作区里往往有几十个会话，每个会话只碰了自己那几个文件。平铺一坨看不出
+// 「哪个文件是哪次聊出来的」，所以按会话分组。
+//
+// 会话记录里两样东西直接可用：
+//   {"type":"session/title","data":{"title":"...","source":{...}}}  ← 标题，取最后一条
+//   {"type":"tool/call","data":{"name":"write","arguments":"{...}"}} ← 参数里带路径
+// 参数是 JSON 字符串，递归捞出所有以工作区根开头的字符串，再用文件系统核实存在性，
+// 这样既不会把命令里随手写的相对路径当成文件，也不会列进已经被删掉的东西。
+// 会话目录被删掉之后这里自然扫不到，所以「已删除的会话不展示」是白送的。
+
+const SESSION_SCAN_MAX = 24
+const SESSION_FILE_MAX = 400
+
+function collectPaths(raw, root) {
+  const lowerRoot = root.toLowerCase()
+  const found = new Set()
+  const visit = (value) => {
+    if (typeof value === 'string') {
+      if (value.length > 3 && value.length < 600 && value.toLowerCase().includes(lowerRoot)) {
+        found.add(value)
+      }
+      return
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) visit(item)
+      return
+    }
+    if (value && typeof value === 'object') {
+      for (const item of Object.values(value)) visit(item)
+    }
+  }
+  try {
+    visit(JSON.parse(raw))
+  } catch {
+    // 参数不是 JSON（比如纯文本命令），当没有路径处理
+  }
+  return found
+}
+
+// 把路径归一到工作区根的相对路径；不在根下就返回空串
+function relativeUnder(path, root) {
+  const clean = String(path).replace(/^["']|["']$/g, '').replace(/\\/g, '/')
+  const base = root.replace(/\\/g, '/').replace(/\/+$/, '')
+  if (clean.toLowerCase() === base.toLowerCase()) return ''
+  if (!clean.toLowerCase().startsWith(`${base.toLowerCase()}/`)) return ''
+  return clean.slice(base.length + 1)
+}
+
+function sessionFiles(file, root) {
+  let text = ''
+  try {
+    text = file.endsWith('.zstd')
+      ? zstdDecompressSync(readFileSync(file)).toString('utf8')
+      : readFileSync(file, 'utf8')
+  } catch {
+    return null
+  }
+  const lines = text.split('\n')
+  let cwd = ''
+  let title = ''
+  const hits = new Map() // 相对路径 → 最后一次出现的时间
+  for (const line of lines) {
+    if (line === '') continue
+    let event = null
+    try {
+      event = JSON.parse(line)
+    } catch {
+      continue
+    }
+    if (event.type === 'session' && cwd === '') {
+      cwd = typeof event.cwd === 'string' ? event.cwd : ''
+      continue
+    }
+    if (event.type === 'session/title' && typeof event.data?.title === 'string') {
+      title = event.data.title
+      continue
+    }
+    if (event.type === 'tool/call' && typeof event.data?.arguments === 'string') {
+      for (const candidate of collectPaths(event.data.arguments, root)) {
+        const rel = relativeUnder(candidate, root)
+        if (rel === '') continue
+        hits.set(rel, event.time || 0)
+      }
+    }
+  }
+  if (cwd === '' || cwd.toLowerCase() !== root.toLowerCase()) return null
+  const files = []
+  for (const [rel, at] of hits) {
+    if (files.length >= SESSION_FILE_MAX) break
+    const full = join(root, rel)
+    let st = null
+    try {
+      st = statSync(full)
+    } catch {
+      continue // 已经删掉的文件不列
+    }
+    if (!st.isFile()) continue
+    const segments = rel.split('/')
+    if (segments.some((part) => TREE_IGNORE.has(part))) continue
+    files.push({ path: full, rel, name: segments[segments.length - 1], size: st.size, mtime: st.mtimeMs, at })
+  }
+  files.sort((a, b) => b.at - a.at)
+  return { cwd, title, files }
+}
+
+// 会话目录名就是工作区路径的编码：`D:\prodcut\DSH原生官方\插件`
+// → `--D-prodcut-DSH~539F~751F~5B98~65B9-~63D2~4EF6--`
+// 规则：字母数字原样，`:` 和 `\` 变 `-`，汉字变 `~UTF16大写四位~`，首尾各补 `--`。
+// 这条精确命中率最高，26 个工作区里只挑出对应那一个，不用把别人几十份会话都解压一遍。
+function encodeBucket(root) {
+  let out = ''
+  for (const ch of root) {
+    if (/[A-Za-z0-9]/.test(ch)) out += ch
+    else if (ch === '\\' || ch === '/') out += '-'
+    else if (ch === ':') continue // 盘符后的冒号不单独占位，紧跟的反斜杠已经给了一个 -
+    else if (ch >= '\u4e00' && ch <= '\u9fa5') out += '~' + ch.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')
+    else out += '-'
+  }
+  return `--${out}--`
+}
+
+function bucketHint(root) {
+  const parts = root.replace(/\\/g, '/').split('/').filter(Boolean)
+  const ascii = []
+  for (const part of parts) {
+    const clean = part.replace(/[^A-Za-z0-9]/g, '')
+    if (clean === '') break
+    ascii.push(clean.toLowerCase())
+    if (ascii.length >= 2) break
+  }
+  return ascii.join('-')
+}
+
+// 三级退让：精确编码名 → 前两段 ASCII 粗筛 → 全量。宁可慢，也不能因为编码规则
+// 哪天变了就一个会话都看不到。
+function workspaceBuckets(root, buckets) {
+  const exact = buckets.filter((bucket) => bucket === encodeBucket(root))
+  if (exact.length > 0) return exact
+  const hint = bucketHint(root)
+  if (hint === '') return buckets
+  const loose = buckets.filter((bucket) => bucket.toLowerCase().includes(hint))
+  return loose.length > 0 ? loose : buckets
+}
+
+const sessionCache = new Map() // 会话文件 -> { mtime, size, result }，避免每开面板都重解压
+
+function listSessionGroups(input) {
+  const root = requirePath(input?.root)
+  const sessionsDir = sessionsRoot()
+  let buckets = []
+  try {
+    buckets = readdirSync(sessionsDir)
+  } catch {
+    return { root, groups: [], scanned: 0, capped: false }
+  }
+
+  // 先把候选会话都列出来，按文件修改时间倒序 —— 最近聊过的排在前面，
+  // 也正因为倒序，后面「只看前 N 个」砍掉的都是很久没动过的老会话。
+  // 先用目录名筛到对应工作区，一般只剩 1 个 bucket
+  const bucketsToScan = workspaceBuckets(root, buckets)
+
+  const candidates = []
+  for (const bucket of bucketsToScan) {
+    let sessionDirs = []
+    try {
+      sessionDirs = readdirSync(join(sessionsDir, bucket))
+    } catch {
+      continue
+    }
+    for (const sessionId of sessionDirs) {
+      if (!sessionId.startsWith('session-')) continue
+      const dir = join(sessionsDir, bucket, sessionId)
+      let names = []
+      try {
+        names = readdirSync(dir)
+      } catch {
+        continue
+      }
+      const store = names.find((n) => n.startsWith('session.v4.jsonl'))
+      if (store === undefined) continue
+      const file = join(dir, store)
+      try {
+        const st = statSync(file)
+        candidates.push({ file, mtime: st.mtimeMs, size: st.size, id: sessionId })
+      } catch {
+        continue
+      }
+    }
+  }
+  candidates.sort((a, b) => b.mtime - a.mtime)
+
+  const limit = Math.min(candidates.length, SESSION_SCAN_MAX)
+  const groups = []
+  for (let i = 0; i < limit; i += 1) {
+    const candidate = candidates[i]
+    let parsed = null
+    const cached = sessionCache.get(candidate.file)
+    if (cached !== undefined && cached.mtime === candidate.mtime && cached.size === candidate.size) {
+      parsed = cached.result
+    } else {
+      parsed = sessionFiles(candidate.file, root)
+      sessionCache.set(candidate.file, { mtime: candidate.mtime, size: candidate.size, result: parsed })
+    }
+    if (parsed === null || parsed.files.length === 0) continue
+    groups.push({
+      id: candidate.id,
+      title: parsed.title !== '' ? parsed.title : candidate.id.replace(/^session-/, '').slice(0, 8),
+      files: parsed.files,
+      count: parsed.files.length,
+      mtime: candidate.mtime,
+    })
+  }
+  groups.sort((a, b) => b.mtime - a.mtime)
+  return { root, groups, scanned: limit, capped: candidates.length > limit }
+}
+
 // 导出给本地验证脚本用（不经 HTTP 直接打这三个函数），运行时不依赖这个导出
 export const handlers = {
   volumes: () => listVolumes(),
@@ -687,6 +904,7 @@ export const handlers = {
   read: (args) => readFileBytes(args),
   workspace: (args) => workspaceOf(args),
   tree: (args) => listTree(args),
+  sessions: (args) => listSessionGroups(args),
 }
 
 function envelope(value) {
