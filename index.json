@@ -55,8 +55,8 @@
         "zh": "磁盘管理器"
       },
       "description": {
-        "en": "Browse local disks from the right sidebar the way This PC and Disk Management do: volume overview with usage bars, a session-grouped list of the documents each conversation produced plus workspace documents no session touched, drag files straight into the chat composer, an expandable folder tree with real app icons, and delete to Recycle Bin. Windows only; no partition operations.",
-        "zh": "在右侧栏按「此电脑 / 磁盘管理」的逻辑浏览本地磁盘：卷总览带已用进度条、按会话分组列出每次对话产出的文档（并补上会话没碰过的工作区文档）、把文件直接拖进对话输入框、可展开的目录树带程序真图标、删除只进回收站。仅支持 Windows，不做任何分区操作。"
+        "en": "Browse local disks from the right sidebar the way This PC and Disk Management do: volume overview with usage bars, a session-grouped list of the documents each conversation produced plus workspace documents no session touched, multi-select with batch delete to Recycle Bin, drag files straight into the chat composer, and an expandable folder tree with real app icons. Windows only; no partition operations.",
+        "zh": "在右侧栏按「此电脑 / 磁盘管理」的逻辑浏览本地磁盘：卷总览带已用进度条、按会话分组列出每次对话产出的文档（并补上会话没碰过的工作区文档）、多选与批量删除（只进回收站）、把文件直接拖进对话输入框、可展开的目录树带程序真图标。仅支持 Windows，不做任何分区操作。"
       },
       "icon": "assets/icon-180.png",
       "author": "dsh-disk-manager contributors",
@@ -91,12 +91,12 @@
       },
       "versions": [
         {
-          "version": "0.4.1",
-          "publishTimestamp": 1793606301,
+          "version": "0.4.2",
+          "publishTimestamp": 1793607425,
           "source": {
             "type": "git",
             "url": "https://github.com/Ananpng123/dsh-disk-manager",
-            "commit": "7d94afe649bee27bb31645d7737b405d73e3cea1"
+            "commit": "3cca0bde48efd86bc3bedd2f92519be8d753d666"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5"
