@@ -1899,6 +1899,240 @@ window.__ModuleLoader__.load({
       );
     }
 
+    // ---------- 工作区文件 ----------
+    // 按工作区而不是按会话：面板一打开就扫一遍当前工作区根目录，列成树。
+    // 根目录不问用户 —— 问宿主「这个会话的 cwd 是多少」，会话记录第一行就写着。
+    // 扫描跳过 node_modules / .git / dist 这些，否则一个工作区能扫出几万条把面板卡死。
+    const WS_TYPE_ID = 'dsh-disk-manager/workspace';
+    const WS_KIND = 'dsh-workspace';
+
+    function WorkspacePane({ sessionId }) {
+      const [root, setRoot] = useState('');
+      const [entries, setEntries] = useState([]);
+      const [open, setOpen] = useState(() => new Set());
+      const [query, setQuery] = useState('');
+      const [loading, setLoading] = useState(true);
+      const [error, setError] = useState('');
+      const [meta, setMeta] = useState({ truncated: false, count: 0 });
+      const [menu, setMenu] = useState(null);
+      const alive = useRef(true);
+
+      useEffect(() => {
+        alive.current = true;
+        return () => {
+          alive.current = false;
+        };
+      }, []);
+
+      const load = useCallback(async () => {
+        setLoading(true);
+        setError('');
+        try {
+          const found = await call('workspace', { sessionId });
+          const base = found?.root || '';
+          if (base === '') {
+            if (!alive.current) return;
+            setRoot('');
+            setEntries([]);
+            setError('没找到这个会话对应的工作区目录。插件靠会话记录里的 cwd 定位，这个会话可能还没落盘。');
+            setLoading(false);
+            return;
+          }
+          const tree = await call('tree', { root: base });
+          if (!alive.current) return;
+          setRoot(tree?.root || base);
+          setEntries(Array.isArray(tree?.entries) ? tree.entries : []);
+          setMeta({ truncated: Boolean(tree?.truncated), count: tree?.count || 0 });
+          setOpen(new Set());
+          setLoading(false);
+        } catch (err) {
+          if (!alive.current) return;
+          setError(friendlyError(err));
+          setLoading(false);
+        }
+      }, [sessionId]);
+
+      useEffect(() => {
+        void load();
+      }, [load]);
+
+      useEffect(() => {
+        if (menu === null) return undefined;
+        const close = () => setMenu(null);
+        window.addEventListener('mousedown', close);
+        window.addEventListener('resize', close);
+        return () => {
+          window.removeEventListener('mousedown', close);
+          window.removeEventListener('resize', close);
+        };
+      }, [menu]);
+
+      // 树是深度优先拍平的，父节点一定排在子节点前面，所以「父级都展开才可见」可以一趟走完
+      const q = query.trim().toLowerCase();
+      const rows = [];
+      for (const entry of entries) {
+        const parts = entry.rel.split('/');
+        if (q === '') {
+          let visible = true;
+          for (let i = 1; i < parts.length; i += 1) {
+            if (!open.has(parts.slice(0, i).join('/'))) {
+              visible = false;
+              break;
+            }
+          }
+          if (!visible) continue;
+        } else if (!entry.rel.toLowerCase().includes(q)) {
+          continue;
+        }
+        rows.push({ entry, depth: parts.length - 1 });
+        if (rows.length >= 400) break;
+      }
+
+      const toggle = (rel) => {
+        setOpen((prev) => {
+          const next = new Set(prev);
+          if (next.has(rel)) next.delete(rel);
+          else next.add(rel);
+          return next;
+        });
+      };
+
+      const openEntry = async (entry) => {
+        if (entry.isDir) {
+          toggle(entry.rel);
+          return;
+        }
+        try {
+          await call('open', { path: entry.path });
+        } catch (err) {
+          setError(friendlyError(err));
+        }
+      };
+
+      const menuAction = async (kind) => {
+        const target = menu?.entry;
+        setMenu(null);
+        if (!target) return;
+        try {
+          if (kind === 'open') await call('open', { path: target.path });
+          else if (kind === 'reveal') await call('reveal', { path: target.path });
+          else if (kind === 'copy') await call('clipboard', { text: target.path });
+        } catch (err) {
+          setError(friendlyError(err));
+        }
+      };
+
+      return h(
+        'div',
+        { className: 'dsk-root' },
+        h(
+          'div',
+          { className: 'dsk-head' },
+          h('span', { className: 'dsk-title' }, '工作区文件'),
+          h('button', { type: 'button', className: 'dsk-btn', title: '重新扫描', onClick: () => void load() }, '⟳'),
+        ),
+        root !== ''
+          ? h(
+              'div',
+              {
+                className: 'dsk-hint',
+                title: root,
+                style: {
+                  padding: '0 10px 6px',
+                  fontSize: 11,
+                  opacity: 0.6,
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                },
+              },
+              root,
+            )
+          : null,
+        h(
+          'div',
+          { style: { padding: '0 10px 6px' } },
+          h('input', {
+            className: 'dsk-input',
+            type: 'text',
+            placeholder: '搜索文件名',
+            value: query,
+            onChange: (event) => setQuery(event.target.value),
+          }),
+        ),
+        error !== ''
+          ? h('div', { className: 'dsk-err', style: { margin: '0 10px 6px', fontSize: 12 }, title: error }, error)
+          : null,
+        h(
+          'div',
+          { className: 'dsk-body', onClick: () => setMenu(null) },
+          loading
+            ? h('div', { className: 'dsk-empty' }, '正在扫描工作区…')
+            : rows.length === 0
+              ? h('div', { className: 'dsk-empty' }, q === '' ? '这个工作区里没有文件' : '没有匹配的文件')
+              : rows.map(({ entry, depth }) =>
+                  h(
+                    'div',
+                    {
+                      key: entry.rel,
+                      className: `dsk-row${entry.isDir ? ' dsk-row-dir' : ''}`,
+                      title: entry.path,
+                      style: { paddingLeft: 8 + depth * 14 },
+                      onClick: () => void openEntry(entry),
+                      onContextMenu: (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        setMenu({ x: event.clientX, y: event.clientY, entry });
+                      },
+                    },
+                    h(
+                      'span',
+                      { style: { width: 14, flex: '0 0 auto', opacity: 0.7 } },
+                      entry.isDir ? (open.has(entry.rel) || q !== '' ? '▾' : '▸') : '',
+                    ),
+                    h('span', { className: 'dsk-name' }, entry.name),
+                    entry.isDir ? null : h('span', { className: 'dsk-badge' }, fmtBytes(entry.size)),
+                  ),
+                ),
+          meta.truncated
+            ? h('div', { className: 'dsk-more' }, `已到扫描上限（${meta.count} 项），更深或更多的内容没列出来`)
+            : null,
+        ),
+        menu === null
+          ? null
+          : h(
+              'div',
+              {
+                className: 'dsk-menu',
+                style: { position: 'fixed', left: menu.x, top: menu.y, zIndex: 60 },
+                onMouseDown: (event) => event.stopPropagation(),
+              },
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, menu.entry.isDir ? '打开文件夹' : '打开'),
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('reveal') }, '在资源管理器中显示'),
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('copy') }, '复制路径'),
+            ),
+      );
+    }
+
+    function WorkspaceButton({ nav }) {
+      return h(
+        'button',
+        {
+          type: 'button',
+          className: 'dsk-iconbtn',
+          title: '工作区文件',
+          onClick: () => {
+            try {
+              if (typeof nav?.openTab === 'function') nav.openTab(WS_KIND);
+            } catch (err) {
+              console.error('[dsh-disk] 打开工作区面板失败', err);
+            }
+          },
+        },
+        h('span', { 'aria-hidden': 'true' }, '🗂'),
+      );
+    }
+
     // ---------- 会话头入口 ----------
     function EntryButton({ nav }) {
       return h(
@@ -2029,6 +2263,53 @@ window.__ModuleLoader__.load({
                 ),
               ),
             'dsh-disk-manager: entry button',
+          );
+
+          // ---------- 工作区文件 tab ----------
+          scope.effect(
+            () =>
+              guard('workspace tab type', () =>
+                tabs.register({
+                  id: WS_TYPE_ID,
+                  kind: WS_KIND,
+                  keepMounted: true,
+                  title: () => '工作区',
+                }),
+              ),
+            'dsh-disk-manager: workspace tab type',
+          );
+
+          scope.effect(
+            () =>
+              guard('workspace tab body', () =>
+                slots.register(
+                  { name: 'sidebar.right.pane.tab', key: WS_TYPE_ID },
+                  (props) => h(WorkspacePane, { sessionId: props?.sessionId }),
+                ),
+              ),
+            'dsh-disk-manager: workspace tab body',
+          );
+
+          scope.effect(
+            () =>
+              guard('workspace tab title', () =>
+                slots.register(
+                  { name: 'sidebar.right.pane.tab.title', key: WS_TYPE_ID },
+                  () => '工作区',
+                ),
+              ),
+            'dsh-disk-manager: workspace tab title',
+          );
+
+          scope.effect(
+            () =>
+              guard('workspace button', () =>
+                slots.register(
+                  { name: 'conversation.session.header.utilities', id: 'dsh-ws-entry', order: 86 },
+                  () => h(WorkspaceButton, { nav }),
+                ),
+              ),
+            'dsh-disk-manager: workspace button',
           );
         });
       },

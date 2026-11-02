@@ -22,6 +22,7 @@ import { execFile, spawn } from 'node:child_process'
 import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { promisify } from 'node:util'
+import { zstdDecompressSync } from 'node:zlib'
 
 export const name = 'dsh-disk-manager'
 export const inject = []
@@ -544,6 +545,129 @@ function readFileBytes(input) {
   }
 }
 
+// ── 工作区文件树 ────────────────────────────────────────────────────────────
+// 工作区根怎么来：不猜、不问用户。会话记录的第一行事件里就有 `cwd`，也就是
+// 这个会话所在的目录。文件在 <DSH_HOME>/sessions/<工作区编码>/<sessionId>/ 下，
+// 行首那条事件形如 {"type":"session","version":4,"cwd":"D:\\...","agentPreset":"cordis"}。
+// 压缩格式是 zstd，Node 22.15+ 原生可解，不用装依赖。
+
+const TREE_MAX_DEPTH = 6
+const TREE_MAX_ENTRIES = 3000
+const TREE_IGNORE = new Set([
+  'node_modules', '.git', '.svn', '.hg', 'dist', 'build', 'out', '.next', '.nuxt',
+  'coverage', '__pycache__', '.venv', 'venv', 'env', 'target', '.cache', '.turbo',
+  'vendor', '.gradle', '.mvn', 'Pods', 'DerivedData', '.pytest_cache', '.mypy_cache',
+  '.idea', '.vs', 'bin', 'obj',
+])
+const TREE_IGNORE_FILES = new Set(['.DS_Store', 'Thumbs.db', 'desktop.ini'])
+
+function sessionsRoot() {
+  const home = process.env.DSH_HOME || join(process.env.USERPROFILE || '', '.dsh')
+  return join(home, 'sessions')
+}
+
+function findSessionFile(sessionId) {
+  const id = typeof sessionId === 'string' ? sessionId.trim() : ''
+  if (!/^session-[A-Za-z0-9-]+$/.test(id)) return null
+  const root = sessionsRoot()
+  let buckets = []
+  try {
+    buckets = readdirSync(root)
+  } catch {
+    return null
+  }
+  for (const bucket of buckets) {
+    const dir = join(root, bucket, id)
+    if (!existsSync(dir)) continue
+    for (const file of ['session.v4.jsonl.zstd', 'session.jsonl.zstd', 'session.v4.jsonl', 'session.jsonl']) {
+      const full = join(dir, file)
+      if (existsSync(full)) return full
+    }
+  }
+  return null
+}
+
+// 只解压第一行：整份会话可能有几千行，但我们只要开头那条 session 事件。
+// zstd 没有流式"只解前几字节"的简单接口，整份解压后立刻切片，几十 KB 的开销可忽略。
+function workspaceOf(input) {
+  const file = findSessionFile(input?.sessionId)
+  if (!file) return { root: '', source: 'none' }
+  try {
+    const raw = file.endsWith('.zstd')
+      ? zstdDecompressSync(readFileSync(file)).toString('utf8')
+      : readFileSync(file, 'utf8')
+    const cut = raw.indexOf('\n')
+    const head = JSON.parse(cut > 0 ? raw.slice(0, cut) : raw)
+    const cwd = typeof head?.cwd === 'string' ? head.cwd : ''
+    return { root: cwd, source: cwd ? 'session' : 'none' }
+  } catch (error) {
+    return { root: '', source: 'none', error: error?.message ?? '' }
+  }
+}
+
+// 递归扫工作区。跳过依赖/构建目录是必须的：这个工作区光 node_modules 就十几份，
+// 不跳过一次能扫出几万个文件，右栏直接卡死。
+function listTree(input) {
+  const root = requirePath(input?.root)
+  const entries = []
+  let capped = false // 条目数到顶：整个扫描停止
+  let deepened = false // 某条分支超过深度：只跳过那条分支，其余继续
+  const walk = (dir, depth, rel) => {
+    if (capped) return
+    if (depth > TREE_MAX_DEPTH) {
+      deepened = true
+      return
+    }
+    let items = []
+    try {
+      items = readdirSync(dir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const item of items) {
+      if (capped) return
+      if (entries.length >= TREE_MAX_ENTRIES) {
+        capped = true
+        return
+      }
+      const label = item.name
+      const full = join(dir, label)
+      const relPath = rel === '' ? label : `${rel}/${label}`
+      if (item.isDirectory()) {
+        if (TREE_IGNORE.has(label)) continue
+        let mtime = 0
+        try {
+          mtime = statSync(full).mtimeMs
+        } catch {
+          mtime = 0
+        }
+        entries.push({ path: full, rel: relPath, name: label, isDir: true, size: 0, mtime })
+        walk(full, depth + 1, relPath)
+      } else if (item.isFile()) {
+        if (TREE_IGNORE_FILES.has(label)) continue
+        let st = null
+        try {
+          st = statSync(full)
+        } catch {
+          continue
+        }
+        entries.push({ path: full, rel: relPath, name: label, isDir: false, size: st.size, mtime: st.mtimeMs })
+      }
+    }
+  }
+  walk(root, 1, '')
+  return {
+    root,
+    entries,
+    count: entries.length,
+    truncated: capped || deepened,
+    capped,
+    deepened,
+    maxDepth: TREE_MAX_DEPTH,
+    maxEntries: TREE_MAX_ENTRIES,
+  }
+}
+
 // 导出给本地验证脚本用（不经 HTTP 直接打这三个函数），运行时不依赖这个导出
 export const handlers = {
   volumes: () => listVolumes(),
@@ -561,6 +685,8 @@ export const handlers = {
   trash: (args) => trashPath(args?.path),
   settings: (args) => openSettings(args?.uri),
   read: (args) => readFileBytes(args),
+  workspace: (args) => workspaceOf(args),
+  tree: (args) => listTree(args),
 }
 
 function envelope(value) {
