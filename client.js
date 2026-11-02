@@ -152,7 +152,10 @@ window.__ModuleLoader__.load({
 .dsk-map .blk:hover rect{stroke:var(--dsw-alias-brand-primary,#0078d4);stroke-width:2}
 .dsk-map .blk text{fill:#fff;font-size:11px;pointer-events:none}
 .dsk-ratio{flex:0 0 76px;height:5px;border-radius:3px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
-.dsk-pct{flex:0 0 42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;margin-left:6px}
+.dsk-pct{flex:0 0 42px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right}
+/* 弹性间隔：横向左边界固定（名称列定宽），大小右边界贴行右边缘，
+   中间剩余空间由这三个间隔平分 —— 条/百分比/重算/大小 四列间距必然相等 */
+.dsk-sp{flex:1 1 0;min-width:0}
 .dsk-ratio i{display:block;height:100%;width:0;border-radius:2px;background:var(--dsw-alias-brand-primary,#0078d4);transition:width .25s ease}
 .dsk-calc{flex:0 0 46px;font-size:10.5px;padding:1px 0;border-radius:5px;cursor:pointer;border:1px solid var(--dsw-alias-border-l1,rgba(128,128,128,.24));background:transparent;color:var(--label-dim,rgba(128,128,128,.75));text-align:center}
 .dsk-calc:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16));color:inherit}
@@ -1400,18 +1403,24 @@ window.__ModuleLoader__.load({
                 { key: 'bar', className: 'dsk-ratio', title: done ? `占本层 ${pct}` : '还没算' },
                 h('i', { style: { width: `${width}%` } }),
               ),
+              h('span', { key: 'sp1', className: 'dsk-sp' }),
               h('span', { key: 'pct', className: 'dsk-pct' }, done ? pct : ''),
+              h('span', { key: 'sp2', className: 'dsk-sp' }),
             ];
           })(),
           entry.isDir && !layout.compact
-            ? h('button', {
-                className: 'dsk-calc',
-                onClick: (event) => {
-                  event.stopPropagation();
-                  onMeasure(entry.path);
-                },
-                title: '统计这个目录的大小',
-              }, measured ? '重算' : '算大小')
+            ? [
+                h('button', {
+                  key: 'calc',
+                  className: 'dsk-calc',
+                  onClick: (event) => {
+                    event.stopPropagation();
+                    onMeasure(entry.path);
+                  },
+                  title: '统计这个目录的大小',
+                }, measured ? '重算' : '算大小'),
+                h('span', { key: 'sp3', className: 'dsk-sp' }),
+              ]
             : null,
           h('span', { className: 'dsk-size' }, sizeText),
         );
