@@ -793,6 +793,7 @@ function sessionFiles(file, root) {
   let cwd = ''
   let title = ''
   let skipped = 0
+  let calls = 0
   const hits = new Map() // 相对路径 → 最后一次出现的时间
   for (const line of lines) {
     if (line === '') continue
@@ -810,15 +811,23 @@ function sessionFiles(file, root) {
       title = event.data.title
       continue
     }
-    if (event.type === 'tool/call' && typeof event.data?.arguments === 'string') {
-      for (const candidate of collectPaths(event.data.arguments, root)) {
+    if (event.type === 'tool/call') {
+      calls += 1
+      const args = event.data?.arguments
+      // 探针里 arguments 是字符串，但真实环境下也可能是已解析的对象。
+      // 只认字符串会把整类调用一下跳过，面板就永远空着 —— 所以对象也重新序列化再扫。
+      const raw = typeof args === 'string' ? args : args === undefined || args === null ? '' : JSON.stringify(args)
+      if (raw === '') continue
+      for (const candidate of collectPaths(raw, root)) {
         const rel = relativeUnder(candidate, root)
         if (rel === '') continue
         hits.set(rel, event.time || 0)
       }
     }
   }
-  if (cwd === '' || cwd.toLowerCase() !== root.toLowerCase()) return null
+  if (cwd === '' || cwd.toLowerCase() !== root.toLowerCase()) {
+    return { cwdMismatch: true, cwd, title, calls, hits: hits.size, skipped, files: [] }
+  }
   const files = []
   for (const [rel, at] of hits) {
     if (files.length >= SESSION_FILE_MAX) break
@@ -842,7 +851,7 @@ function sessionFiles(file, root) {
     files.push({ path: full, rel, name: segments[segments.length - 1], size: st.size, mtime: st.mtimeMs, at })
   }
   files.sort((a, b) => b.at - a.at)
-  return { cwd, title, files, skipped }
+  return { cwd, title, files, skipped, calls, hits: hits.size }
 }
 
 // 会话目录名就是工作区路径的编码：`D:\prodcut\DSH原生官方\插件`
@@ -933,6 +942,8 @@ function listSessionGroups(input) {
 
   const limit = Math.min(candidates.length, SESSION_SCAN_MAX)
   const groups = []
+  // 分层计数：读了几份会话 → cwd 对上几个 → 工具调用几次 → 路径命中几条 → 过滤后成组几个
+  const tally = { read: 0, cwdMismatch: 0, calls: 0, hits: 0, skipped: 0, grouped: 0 }
   for (let i = 0; i < limit; i += 1) {
     const candidate = candidates[i]
     let parsed = null
@@ -943,7 +954,17 @@ function listSessionGroups(input) {
       parsed = sessionFiles(candidate.file, root)
       sessionCache.set(candidate.file, { mtime: candidate.mtime, size: candidate.size, result: parsed })
     }
-    if (parsed === null || parsed.files.length === 0) continue
+    if (parsed === null) continue
+    tally.read += 1
+    if (parsed.cwdMismatch === true) {
+      tally.cwdMismatch += 1
+      continue
+    }
+    tally.calls += parsed.calls || 0
+    tally.hits += parsed.hits || 0
+    tally.skipped += parsed.skipped || 0
+    if (parsed.files.length === 0) continue
+    tally.grouped += 1
     groups.push({
       id: candidate.id,
       title: parsed.title !== '' ? parsed.title : candidate.id.replace(/^session-/, '').slice(0, 8),
@@ -964,6 +985,7 @@ function listSessionGroups(input) {
     matchedBuckets: bucketsToScan.length,
     candidates: candidates.length,
     build: BUILD_TAG,
+    tally,
   }
 }
 
