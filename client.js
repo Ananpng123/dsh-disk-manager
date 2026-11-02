@@ -141,10 +141,12 @@ window.__ModuleLoader__.load({
 .dsk-row-dir{cursor:pointer}
 .dsk-ico{flex:0 0 auto;display:inline-flex;width:16px;height:16px;align-items:center;justify-content:center}
 .dsk-appicon{width:16px;height:16px;object-fit:contain}
-.dsk-name{flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.dsk-name{flex:0 1 auto;max-width:52%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px}
+.dsk-gap{flex:1 1 auto;min-width:0}
 .dsk-size{flex:0 0 auto;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums}
 /* 体积占比条：P1 唯一新增的视觉元素。空条表示还没算出来，不画成 0 长度实心条误导 */
-.dsk-ratio{flex:0 0 74px;height:4px;border-radius:2px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
+.dsk-ratio{flex:0 0 90px;height:5px;border-radius:3px;margin-left:10px;background:var(--dsw-alias-border-l1,rgba(128,128,128,.24));overflow:hidden}
+.dsk-pct{flex:0 0 46px;font-size:11px;opacity:.5;font-variant-numeric:tabular-nums;text-align:right;margin-left:6px}
 .dsk-ratio i{display:block;height:100%;width:0;border-radius:2px;background:var(--dsw-alias-brand-primary,#0078d4);transition:width .25s ease}
 .dsk-calc{flex:0 0 auto;border:0;background:transparent;color:var(--dsw-alias-label-secondary,inherit);font-size:11px;cursor:pointer;padding:2px 4px;border-radius:4px}
 .dsk-calc:hover{background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.16));color:inherit}
@@ -1291,19 +1293,23 @@ window.__ModuleLoader__.load({
                 : h(FileIcon, { name: entry.name }),
           ),
           h('span', { className: 'dsk-name' }, entry.name),
-          // 占比条：宽度按本层最大项归一（最大那个满格），悬停显示占本层百分比。
-          // 还没算出来的目录条是空的，不画成 0 长度实心条假装有数据。
+          // 占比条：条宽按「本层最大项」归一（最大那个满格），右边常显的百分比按「本层合计」算。
+          // 两个口径分开用，不混。还没算出来的目录条是空的，不画成 0 长度实心条假装有数据。
           (() => {
-            if (!entry.isDir) return null;
+            if (!entry.isDir) return h('span', { className: 'dsk-gap' });
             const m = sizes[entry.path];
             const done = m && typeof m.bytes === 'number';
             const width = done && maxDirBytes > 0 ? Math.max(2, Math.round((m.bytes / maxDirBytes) * 100)) : 0;
-            const pct = done && totalDirBytes > 0 ? ((m.bytes / totalDirBytes) * 100).toFixed(1) : '';
-            return h(
-              'span',
-              { className: 'dsk-ratio', title: done ? `占本层 ${pct}%` : '还没算' },
-              h('i', { style: { width: `${width}%` } }),
-            );
+            const pct = done && totalDirBytes > 0 ? ((m.bytes / totalDirBytes) * 100).toFixed(1) + '%' : '';
+            return [
+              h(
+                'span',
+                { key: 'bar', className: 'dsk-ratio', title: done ? `占本层 ${pct}` : '还没算' },
+                h('i', { style: { width: `${width}%` } }),
+              ),
+              h('span', { key: 'pct', className: 'dsk-pct' }, done ? pct : ''),
+              h('span', { key: 'gap', className: 'dsk-gap' }),
+            ];
           })(),
           entry.isDir && !layout.compact
             ? h('button', {
