@@ -19,9 +19,9 @@
  */
 
 import { execFile, spawn } from 'node:child_process'
-import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync, writeFileSync } from 'node:fs'
+import { mkdirSync, readFileSync, readdirSync, statfsSync, statSync, existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
-import { homedir, tmpdir } from 'node:os'
+import { homedir } from 'node:os'
 import { promisify } from 'node:util'
 import { zstdDecompressSync } from 'node:zlib'
 
@@ -765,11 +765,11 @@ function listTree(input) {
 const SESSION_SCAN_MAX = 24
 const SESSION_FILE_MAX = 400
 // 每次改宿主侧逻辑就换一个，面板诊断里会显示，用来确认真机跑的是哪一版
-const BUILD_TAG = 'v8'
+const BUILD_TAG = 'v9'
 
 function collectPaths(raw, root) {
-  // 工具调用里的路径写法不统一：ops_glob / ops_bash 那类给的是 `D:/prodcut/...`（正斜杠），
-  // 会话 cwd 却是 `D:\prodcut\...`（反斜杠），直接 includes 永远不命中，整个面板就是空的。
+  // 工具调用里的路径写法不统一：ops_glob / ops_bash 那类给的是 `D:/...` 这种正斜杠，
+  // 会话 cwd 却是 `D:\...` 这种反斜杠，直接 includes 永远不命中，整个面板就是空的。
   // 统一成正斜杠再比，命中后仍然返回原始字符串。
   const lowerRoot = root.replace(/\\/g, '/').toLowerCase()
   const found = new Set()
@@ -890,9 +890,8 @@ function sessionFiles(file, root) {
   return { cwd, title, files, skipped, calls, hits: hits.size, types, head: text.slice(0, 160) }
 }
 
-// 会话目录名就是工作区路径的编码：`D:\prodcut\DSH原生官方\插件`
-// → `--D-prodcut-DSH~539F~751F~5B98~65B9-~63D2~4EF6--`
-// 规则：字母数字原样，`:` 和 `\` 变 `-`，汉字变 `~UTF16大写四位~`，首尾各补 `--`。
+// 会话目录名就是工作区路径的编码，形如 `--C-work-demo--`；
+// 规则：字母数字原样，`:` 和 `\` 变 `-`，汉字变 `~UTF16大写四位~`（如 项 U+9879 → ~9879），首尾各补 `--`。
 // 这条精确命中率最高，26 个工作区里只挑出对应那一个，不用把别人几十份会话都解压一遍。
 function encodeBucket(root) {
   let out = ''
@@ -1012,32 +1011,6 @@ function listSessionGroups(input) {
     })
   }
   groups.sort((a, b) => b.mtime - a.mtime)
-  // 诊断落盘：面板列不出东西时，外部直接读这个文件就能定位断在哪一层，
-  // 不用让用户对着屏幕抄一长串数字。
-  try {
-    writeFileSync(
-      join(tmpdir(), 'dsh-disk-diag.json'),
-      JSON.stringify(
-        {
-          build: BUILD_TAG,
-          at: new Date().toISOString(),
-          root,
-          home: sessionsDir,
-          buckets: buckets.length,
-          matchedBuckets: bucketsToScan.length,
-          candidates: candidates.length,
-          scanned: limit,
-          tally,
-          sample,
-        },
-        null,
-        1,
-      ),
-      'utf8',
-    )
-  } catch {
-    // 写不了就算了，面板上的诊断还在
-  }
   return {
     root,
     groups,
