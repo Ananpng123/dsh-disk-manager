@@ -2082,7 +2082,6 @@ window.__ModuleLoader__.load({
                 { className: 'dsk-badge', title: '创建时间', style: { fontWeight: 400, fontSize: 12, letterSpacing: 0, opacity: 0.55, fontVariantNumeric: 'tabular-nums' } },
                 fmtTime(file.birthtime || file.mtime),
               ),
-              h('span', { className: 'dsk-badge', style: { fontWeight: 400, fontSize: 12, letterSpacing: 0, opacity: 0.55, fontVariantNumeric: 'tabular-nums' } }, fmtBytes(file.size)),
             ),
           );
         }
