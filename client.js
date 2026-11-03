@@ -2,7 +2,7 @@
 // 右栏 tab：卷总览 → 目录浏览 → 按需统计目录大小。
 // 只读，不做删除/分区。数据全部来自 host 半的 /api/dsh-disk。
 window.__ModuleLoader__.load({
-  id: 'dsh-disk-manager',
+  id: '@ananyang/dsh-disk-manager',
   factory: (require) => {
     const react = require('react');
     const h = react.createElement;
@@ -2614,7 +2614,7 @@ window.__ModuleLoader__.load({
     }
 
     return {
-      name: 'dsh-disk-manager',
+      name: '@ananyang/dsh-disk-manager',
       inject: [],
       apply(ctx) {
         injectStyle();
