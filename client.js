@@ -1876,9 +1876,9 @@ window.__ModuleLoader__.load({
           const quoteTarget = entry?.path ?? listing?.path ?? path;
           if (!quoteTarget) return;
           const label = entry?.name || quoteTarget.split(/[\\/]/).pop() || quoteTarget;
-          const text = sessionId
-            ? `@[${label}](${fileAddress(sessionId, quoteTarget)})`
-            : `@${quoteTarget}`;
+          // DSH 的输入框不解析 dsh-resource 地址：写成 markdown 链接会把整串
+          // %E5%8E%9F 这样的编码原样糊在框里。纯路径反而干净——人一眼看懂，模型也读得到。
+          const text = `@${quoteTarget}`;
           const box = visibleComposers()[0];
           let filled = false;
           if (box) {
@@ -2407,7 +2407,8 @@ window.__ModuleLoader__.load({
             // 引用到对话：把「文件名 + 完整路径」按官方引用语法写进当前输入框，
             // 找不到输入框就退回剪贴板，不能让点了没反应。
             const label = target.name || target.path;
-            const text = `@[${label}](${fileAddress(sessionId, target.path)})`;
+            // 同目录页：只写纯路径，别塞 dsh-resource 地址，输入框不认那个协议
+            const text = `@${target.path}`;
             const box = visibleComposers()[0];
             let filled = false;
             if (box) {
