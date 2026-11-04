@@ -714,7 +714,7 @@ window.__ModuleLoader__.load({
       if (!menu) return null;
 
       const width = 208;
-      const height = menu.volume ? 190 : pane === 'main' ? 340 : 220;
+      const height = menu.volume ? 190 : pane === 'main' ? 370 : 220;
       const left = Math.max(8, Math.min(menu.x, (window.innerWidth || 1200) - width - 8));
       const top = Math.max(8, Math.min(menu.y, (window.innerHeight || 800) - height));
 
@@ -813,6 +813,7 @@ window.__ModuleLoader__.load({
           h('div', { key: 's2', className: 'dsk-sep' }),
           row('create', '新建', () => setPane('create'), '', true),
           row('terminal', '在终端中打开', () => pick('terminal')),
+          row('quote', '引用到会话', () => pick('quote')),
           row('reveal', '在资源管理器中显示', () => pick('reveal')),
           menu.entry ? row('info', '属性', () => pick('info')) : null,
           menu.entry && !menu.entry.volume && !menu.entry.desk
@@ -1868,6 +1869,37 @@ window.__ModuleLoader__.load({
           }
           return;
         }
+        // 引用到会话：按官方认的引用语法 @[名字](资源地址) 写进当前输入框。
+        // 会话引用就是这么写的，这里把 uri 换成 dsh-resource 的文件地址，
+        // 右栏点得开、模型也拿得到完整路径。
+        if (action === 'quote') {
+          const quoteTarget = entry?.path ?? listing?.path ?? path;
+          if (!quoteTarget) return;
+          const label = entry?.name || quoteTarget.split(/[\\/]/).pop() || quoteTarget;
+          const text = sessionId
+            ? `@[${label}](${fileAddress(sessionId, quoteTarget)})`
+            : `@${quoteTarget}`;
+          const box = visibleComposers()[0];
+          let filled = false;
+          if (box) {
+            try {
+              filled = await fillComposer(box, text);
+            } catch {
+              filled = false;
+            }
+          }
+          if (!filled) {
+            try {
+              await navigator.clipboard.writeText(text);
+              setNotice(`输入框没接住，已复制：${label}`);
+            } catch {
+              setNotice('写入输入框和复制都没成功');
+            }
+            return;
+          }
+          setNotice(`已引用：${label}`);
+          return;
+        }
         if (action === 'mkdir') {
           setModal({ kind: 'mkdir', parent: listing?.path || path });
           return;
@@ -1937,7 +1969,7 @@ window.__ModuleLoader__.load({
         } catch (err) {
           setError(friendlyError(err));
         }
-      }, [menu, listing, path, openEntry]);
+      }, [menu, listing, path, openEntry, sessionId]);
 
       const openMenu = useCallback((event, entry) => {
         event.preventDefault();
