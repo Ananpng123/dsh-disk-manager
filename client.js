@@ -1876,9 +1876,11 @@ window.__ModuleLoader__.load({
           const quoteTarget = entry?.path ?? listing?.path ?? path;
           if (!quoteTarget) return;
           const label = entry?.name || quoteTarget.split(/[\\/]/).pop() || quoteTarget;
-          // DSH 的输入框不解析 dsh-resource 地址：写成 markdown 链接会把整串
-          // %E5%8E%9F 这样的编码原样糊在框里。纯路径反而干净——人一眼看懂，模型也读得到。
-          const text = `@${quoteTarget}`;
+          // 文件只写文件名（够认出是哪个）；文件夹写全路径（不同目录下会重名，路径才唯一）。
+          // 对着空白处右键等于选中当前目录，按文件夹处理。
+          // 另外别塞 dsh-resource 地址：输入框不解析它，会把 %E5%8E%9F 这类编码原样糊出来。
+          const asDir = entry ? !!entry.isDir : true;
+          const text = `@${asDir ? quoteTarget : label}`;
           const box = visibleComposers()[0];
           let filled = false;
           if (box) {
@@ -2407,8 +2409,8 @@ window.__ModuleLoader__.load({
             // 引用到对话：把「文件名 + 完整路径」按官方引用语法写进当前输入框，
             // 找不到输入框就退回剪贴板，不能让点了没反应。
             const label = target.name || target.path;
-            // 同目录页：只写纯路径，别塞 dsh-resource 地址，输入框不认那个协议
-            const text = `@${target.path}`;
+            // 同目录页：文件给文件名，文件夹给全路径
+            const text = `@${target.isDir ? target.path : label}`;
             const box = visibleComposers()[0];
             let filled = false;
             if (box) {
