@@ -813,7 +813,7 @@ window.__ModuleLoader__.load({
           h('div', { key: 's2', className: 'dsk-sep' }),
           row('create', '新建', () => setPane('create'), '', true),
           row('terminal', '在终端中打开', () => pick('terminal')),
-          row('quote', '引用到会话', () => pick('quote')),
+          row('quote', '引用到对话', () => pick('quote')),
           row('reveal', '在资源管理器中显示', () => pick('reveal')),
           menu.entry ? row('info', '属性', () => pick('info')) : null,
           menu.entry && !menu.entry.volume && !menu.entry.desk
@@ -1890,8 +1890,8 @@ window.__ModuleLoader__.load({
           }
           if (!filled) {
             try {
-              await navigator.clipboard.writeText(text);
-              setNotice(`输入框没接住，已复制：${label}`);
+              await call('clipboard', { text });
+              setNotice(`输入框没接住，引用已复制：${label}`);
             } catch {
               setNotice('写入输入框和复制都没成功');
             }
@@ -2403,7 +2403,25 @@ window.__ModuleLoader__.load({
           } else if (kind === 'open') await call('open', { path: target.path });
           else if (kind === 'reveal') await call('reveal', { path: target.path });
           else if (kind === 'copy') await call('clipboard', { text: target.path });
-          else if (kind === 'delete') {
+          else if (kind === 'quote') {
+            // 引用到对话：把「文件名 + 完整路径」按官方引用语法写进当前输入框，
+            // 找不到输入框就退回剪贴板，不能让点了没反应。
+            const label = target.name || target.path;
+            const text = `@[${label}](${fileAddress(sessionId, target.path)})`;
+            const box = visibleComposers()[0];
+            let filled = false;
+            if (box) {
+              try {
+                filled = await fillComposer(box, text);
+              } catch {
+                filled = false;
+              }
+            }
+            if (!filled) {
+              await call('clipboard', { text });
+              setError(`输入框没接住，引用已复制：${label}`);
+            }
+          } else if (kind === 'delete') {
             // 右键项在选中集合里、且选了好几个，就按整批删；
             // 只右键单个文件时不牵连其它已选项。
             const batch = selected.size > 1 && selected.has(target.path);
@@ -2579,6 +2597,7 @@ window.__ModuleLoader__.load({
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('open') }, '用系统程序打开'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('reveal') }, '在资源管理器中显示'),
               h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('copy') }, '复制路径'),
+              h('div', { className: 'dsk-mitem', onMouseDown: () => void menuAction('quote') }, '引用到对话'),
               h(
                 'div',
                 { className: 'dsk-mitem dsk-mitem-danger', onMouseDown: () => void menuAction('delete') },
