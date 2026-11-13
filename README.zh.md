@@ -56,7 +56,7 @@ plugin_manager install_bundle <path-to>dsh-disk-manager
 两个都合并之前，直接按 tag 装：
 
 ```bash
-git+https://github.com/Ananpng123/dsh-disk-manager.git#v0.4.2
+git+https://github.com/Ananpng123/dsh-disk-manager.git#v0.4.3
 ```
 
 插件自带的索引托管在 <https://ananpng123.github.io/dsh-disk-manager/index.json>，把它加进 Discover 的索引源就能立刻看到这条收录。

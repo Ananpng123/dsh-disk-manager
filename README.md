@@ -56,7 +56,7 @@ Submitted to two community indexes, both waiting for review:
 Until either is merged, install straight from the tag:
 
 ```bash
-git+https://github.com/Ananpng123/dsh-disk-manager.git#v0.4.2
+git+https://github.com/Ananpng123/dsh-disk-manager.git#v0.4.3
 ```
 
 The market index this plugin ships is self-hosted at <https://ananpng123.github.io/dsh-disk-manager/index.json>; add it as an index source in Discover to see the listing immediately.
