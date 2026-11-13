@@ -459,6 +459,10 @@ async function assertDeletable(target) {
   }
 }
 
+// 删除只走回收站，永不做永久删除。
+// 不存在的路径算已删成功：用户要的是「它消失」，它不在就是了；
+// 只按 Container 判定会让「不存在」走进 else，调 DeleteFile 抛「未能找到文件」，
+// 把一个已经完成的操作报成失败（重复删同一个文件必现）。
 async function trashPath(input) {
   const target = requirePath(input).replace(/[\\/]+$/, '')
   await assertDeletable(target)
@@ -471,12 +475,16 @@ async function trashPath(input) {
     '$paths = $raw | ConvertFrom-Json',
     'foreach ($p in $paths) {',
     '  try {',
-    '    if (Test-Path -LiteralPath $p -PathType Container) {',
-    '      [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '    if (-not (Test-Path -LiteralPath $p)) {',
+    '      Write-Output ("OK " + $p)',
     '    } else {',
-    '      [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '      if (Test-Path -LiteralPath $p -PathType Container) {',
+    '        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '      } else {',
+    '        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '      }',
+    '      Write-Output ("OK " + $p)',
     '    }',
-    '    Write-Output ("OK " + $p)',
     '  } catch {',
     '    Write-Output ("ERR " + $p + " :: " + $_.Exception.Message)',
     '  }',
@@ -503,6 +511,7 @@ async function trashPath(input) {
 
 // 批量删除：PowerShell 脚本本来就支持多路径，之前只是每次只塞一个进去。
 // 选 10 个文件就起 10 次 PowerShell，用户看到的就是「一个一个地掉」。
+// 批量版同一套语义：不存在的算成功，随结果一起回 OK。
 async function trashPaths(input) {
   const raw = Array.isArray(input?.paths) ? input.paths : []
   const targets = raw
@@ -531,12 +540,16 @@ async function trashPaths(input) {
     '$paths = $raw | ConvertFrom-Json',
     'foreach ($p in $paths) {',
     '  try {',
-    '    if (Test-Path -LiteralPath $p -PathType Container) {',
-    '      [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '    if (-not (Test-Path -LiteralPath $p)) {',
+    '      Write-Output ("OK " + $p)',
     '    } else {',
-    '      [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '      if (Test-Path -LiteralPath $p -PathType Container) {',
+    '        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '      } else {',
+    '        [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile($p, "OnlyErrorDialogs", "SendToRecycleBin")',
+    '      }',
+    '      Write-Output ("OK " + $p)',
     '    }',
-    '    Write-Output ("OK " + $p)',
     '  } catch {',
     '    Write-Output ("ERR " + $p + " :: " + $_.Exception.Message)',
     '  }',
@@ -1098,6 +1111,22 @@ function listSessionGroups(input) {
     const cached = sessionCache.get(candidate.file)
     if (cached !== undefined && cached.mtime === candidate.mtime && cached.size === candidate.size) {
       parsed = cached.result
+      // 缓存键是「会话 jsonl 的 mtime + size」：删掉一个产出文件不会改变会话文件，
+      // 缓存于是永远命中，已删的行就留在面板上，用户再点一次删除就会报「未能找到文件」。
+      // 命中缓存时重新过一遍存在性（几十次 statSync，代价可忽略），顺手把死行从缓存里摘掉。
+      if (parsed !== null && Array.isArray(parsed.files) && parsed.files.length > 0) {
+        const alive = parsed.files.filter((f) => {
+          try {
+            return statSync(f.path).isFile()
+          } catch {
+            return false
+          }
+        })
+        if (alive.length !== parsed.files.length) {
+          parsed = { ...parsed, files: alive }
+          sessionCache.set(candidate.file, { mtime: candidate.mtime, size: candidate.size, result: parsed })
+        }
+      }
     } else {
       parsed = sessionFiles(candidate.file, root)
       sessionCache.set(candidate.file, { mtime: candidate.mtime, size: candidate.size, result: parsed })

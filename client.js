@@ -504,6 +504,10 @@ window.__ModuleLoader__.load({
       // 表现成「volumes 调用失败（200）」「调用失败（404）」——同一个根因，同一句话。
       if (/调用失败（(?:200|40[045]|501|502)）/.test(raw)) return HOST_HINT;
       if (/ENOENT|no such file/i.test(raw)) return '这个位置已经不存在了';
+      // PowerShell 的 .NET 异常是中文的：DeleteFile 撞上不存在的路径会抛
+      // 「使用"3"个参数调用"DeleteFile"时发生异常:"未能找到文件…"」。
+      // 不认这两句的话，原始 .NET 报文会原样弹到界面上，用户读不懂也定位不了。
+      if (/未能找到文件|找不到文件|could not find file/i.test(raw)) return '这个位置已经不存在了';
       return raw || '操作失败';
     }
 
