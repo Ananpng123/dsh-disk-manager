@@ -91,6 +91,18 @@
       },
       "versions": [
         {
+          "version": "0.4.4",
+          "publishTimestamp": 1794661490,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Ananpng123/dsh-disk-manager",
+            "commit": "5af156c10fa8e12ac745f88b89831e6493b1c7af"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5"
+          }
+        },
+        {
           "version": "0.4.3",
           "publishTimestamp": 1794551763,
           "source": {
