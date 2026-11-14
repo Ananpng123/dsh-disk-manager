@@ -885,12 +885,12 @@ function listTree(input) {
 // 这样既不会把命令里随手写的相对路径当成文件，也不会列进已经被删掉的东西。
 // 会话目录被删掉之后这里自然扫不到，所以「已删除的会话不展示」是白送的。
 
-const SESSION_SCAN_MAX = 24
+const SESSION_SCAN_MAX = 60
 const SESSION_FILE_MAX = 400
 // 「其他文档」最多列这么多：工作区里常年累月攒下的文档可能上千个，全列出来只是噪音
-const LOOSE_MAX = 150
+const LOOSE_MAX = 500
 // 每次改宿主侧逻辑就换一个，面板诊断里会显示，用来确认真机跑的是哪一版
-const BUILD_TAG = 'v9'
+const BUILD_TAG = 'v10'
 
 function collectPaths(raw, root) {
   // 工具调用里的路径写法不统一：ops_glob / ops_bash 那类给的是 `D:/...` 这种正斜杠，
@@ -1079,7 +1079,12 @@ function listSessionGroups(input) {
       continue
     }
     for (const sessionId of sessionDirs) {
-      if (!sessionId.startsWith('session-')) continue
+      // 会话目录有两种：主会话是 session-<uuid>，子代理/团队成员是裸 <uuid>。
+      // 以前只认 session- 前缀，子代理会话被整类跳过 —— 于是子代理写出的文件永远归不到
+      // 任何会话，只能掉进「其他文档」。两种都收。
+      const isMain = sessionId.startsWith('session-')
+      const isSub = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(sessionId)
+      if (!isMain && !isSub) continue
       const dir = join(sessionsDir, bucket, sessionId)
       let names = []
       try {
@@ -1092,7 +1097,7 @@ function listSessionGroups(input) {
       const file = join(dir, store)
       try {
         const st = statSync(file)
-        candidates.push({ file, mtime: st.mtimeMs, size: st.size, id: sessionId })
+        candidates.push({ file, mtime: st.mtimeMs, size: st.size, id: sessionId, isSub: !isMain })
       } catch {
         continue
       }
@@ -1145,7 +1150,10 @@ function listSessionGroups(input) {
     tally.grouped += 1
     groups.push({
       id: candidate.id,
-      title: parsed.title !== '' ? parsed.title : candidate.id.replace(/^session-/, '').slice(0, 8),
+      title:
+        (parsed.title !== '' ? parsed.title : candidate.id.replace(/^session-/, '').slice(0, 8)) +
+        (candidate.isSub === true ? ' · 子代理' : ''),
+      isSub: candidate.isSub === true,
       files: parsed.files,
       count: parsed.files.length,
       mtime: candidate.mtime,
